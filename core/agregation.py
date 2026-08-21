@@ -57,6 +57,76 @@ def agreger_par_periode(df_cascade: pd.DataFrame, periode: str) -> pd.DataFrame:
     return pd.DataFrame(lignes)
 
 
+def comparer_periodes(
+    conn: sqlite3.Connection,
+    ligne_id: int,
+    periode_a: tuple[date | str, date | str],
+    periode_b: tuple[date | str, date | str],
+    cadence_constante: float | None = None,
+) -> dict:
+    """Compare deux périodes, avec un mode « à cadence constante » (CDC §4.2).
+
+    Quand la cadence de référence change entre les deux périodes, le TRS chute
+    mécaniquement sans qu'aucune performance réelle n'ait baissé : la barre a
+    monté. Le passé reste juste, mais la comparaison devient trompeuse.
+
+    Cette fonction retourne donc toujours les deux lectures :
+    - `reelle` — chaque période avec la cadence en vigueur à ses dates ;
+    - `constante` — les deux périodes recalculées avec la même cadence, ce qui
+      isole le progrès réel.
+
+    `avertissement` est renseigné dès qu'un changement de cadence tombe dans l'une
+    des périodes ou entre les deux : l'écran doit alors le montrer, jamais laisser
+    l'utilisateur comparer sans le savoir.
+    """
+    from core import temps as temps_module
+
+    if cadence_constante is None:
+        cadence_constante = cadences.cadence_la_plus_recente(conn, ligne_id)
+
+    def _indicateurs(bornes, cadence):
+        cascade = temps_module.cascade_journaliere(
+            conn, ligne_id, bornes[0], bornes[1], cadence_constante=cadence
+        )
+        return indicateurs.indicateurs_periode(cascade)
+
+    resultat = {
+        "periode_a": (iso(periode_a[0]), iso(periode_a[1])),
+        "periode_b": (iso(periode_b[0]), iso(periode_b[1])),
+        "cadence_constante": cadence_constante,
+        "reelle": {"a": _indicateurs(periode_a, None), "b": _indicateurs(periode_b, None)},
+    }
+    if cadence_constante is not None:
+        resultat["constante"] = {
+            "a": _indicateurs(periode_a, cadence_constante),
+            "b": _indicateurs(periode_b, cadence_constante),
+        }
+    else:
+        resultat["constante"] = None
+
+    # Changements de cadence couvrant l'intervalle entier, bornes comprises :
+    # un changement survenu ENTRE les deux périodes fausse aussi la comparaison.
+    bornes = sorted([iso(periode_a[0]), iso(periode_a[1]),
+                     iso(periode_b[0]), iso(periode_b[1])])
+    changements = cadences.dates_changement(conn, ligne_id, bornes[0], bornes[-1])
+    resultat["changements_cadence"] = changements
+    resultat["avertissement"] = (
+        "La cadence de référence a changé le "
+        + ", le ".join(f"{date.fromisoformat(d):%d/%m/%Y}" for d in changements)
+        + ". Les deux périodes ne se comparent pas directement : un TRS plus bas "
+        "peut venir d'une barre plus haute, pas d'une performance dégradée. "
+        "Utilisez la lecture à cadence constante pour isoler le progrès réel."
+        if changements else None
+    )
+
+    for lecture in ("reelle", "constante"):
+        if resultat[lecture] is None:
+            continue
+        a, b = resultat[lecture]["a"]["TRS"], resultat[lecture]["b"]["TRS"]
+        resultat[lecture]["ecart_trs"] = None if a is None or b is None else b - a
+    return resultat
+
+
 def _production_resolue(
     conn: sqlite3.Connection, ligne_id: int, date_debut: date | str, date_fin: date | str
 ) -> pd.DataFrame:

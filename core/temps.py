@@ -81,6 +81,7 @@ def cascade_journaliere(
     ligne_id: int,
     date_debut: date | str,
     date_fin: date | str,
+    cadence_constante: float | None = None,
 ) -> pd.DataFrame:
     """Cascade des temps par jour sur une période, pour une ligne.
 
@@ -92,6 +93,12 @@ def cascade_journaliere(
     Les jours exclus (hors service, hors historique, données manquantes) portent
     leur état et des temps à zéro : ils ne doivent JAMAIS entrer dans une somme —
     core/agregation.py s'en charge.
+
+    cadence_constante : recalcule toute la période avec cette cadence de référence
+    au lieu de celle en vigueur à chaque date. Sert au mode « à cadence constante »
+    des comparaisons (CDC §4.2), qui isole la performance réelle de l'effet d'un
+    changement de référence. À n'utiliser QUE pour comparer : les indicateurs
+    publiés restent ceux calculés avec la cadence en vigueur à la date.
     """
     premier = date.fromisoformat(iso(date_debut))
     dernier = date.fromisoformat(iso(date_fin))
@@ -105,6 +112,18 @@ def cascade_journaliere(
     if not production.empty:
         production = cadences.resoudre_cadences(conn, production)
         production["date"] = pd.to_datetime(production["date"]).dt.date
+        if cadence_constante is not None:
+            if float(cadence_constante) <= 0:
+                from core.erreurs import ErreurMetier
+                raise ErreurMetier(
+                    "La cadence de comparaison doit être supérieure à zéro."
+                )
+            # Les lignes sans cadence applicable restent exclues : leur donner une
+            # cadence changerait le périmètre entre les deux modes et rendrait la
+            # comparaison fausse. Seule la valeur de référence est remplacée.
+            production.loc[production["valeur_ppm"].notna(), "valeur_ppm"] = float(
+                cadence_constante
+            )
 
     jours = []
     jour = premier

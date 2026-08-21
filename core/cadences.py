@@ -71,6 +71,20 @@ def resoudre_cadences(
     )
 
 
+def cadence_la_plus_recente(conn: sqlite3.Connection, ligne_id: int) -> float | None:
+    """Dernière cadence de référence mise en vigueur sur la ligne.
+
+    C'est la valeur proposée par défaut au mode « à cadence constante » : comparer
+    deux périodes à la barre d'aujourd'hui (CDC §4.2).
+    """
+    ligne = conn.execute(
+        "SELECT valeur_ppm FROM cadence WHERE ligne_id = ?"
+        " ORDER BY date_debut DESC, id DESC LIMIT 1",
+        (ligne_id,),
+    ).fetchone()
+    return float(ligne["valeur_ppm"]) if ligne is not None else None
+
+
 def dates_changement(
     conn: sqlite3.Connection, ligne_id: int,
     date_debut: date | str | None = None, date_fin: date | str | None = None,

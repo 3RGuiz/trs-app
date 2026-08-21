@@ -86,6 +86,72 @@ def test_taux_de_realisation(base):
     assert par_article.iloc[0]["taux_realisation"] == pytest.approx(0.8)
 
 
+# ---------------------------------------------------------------------------
+# Comparabilité (CDC §4.2) : quand la cadence de référence change, le TRS chute
+# mécaniquement sans qu'aucune performance réelle n'ait baissé.
+# ---------------------------------------------------------------------------
+
+def test_comparaison_a_cadence_constante(base):
+    """Reproduit l'illustration du CDC §4.2 sur juin et juillet 2026.
+
+    Juin  : 24 ppm, 11 000 paquets -> 80,4 % affiché
+    Juillet : 30 ppm, 13 200 paquets -> 77,2 % affiché
+    La production augmente de 20 % et le TRS baisse de 3,2 points. Recalculé à
+    30 ppm sur les deux mois : 64,3 % puis 77,2 %, soit +12,9 points — le progrès réel.
+    """
+    inserer_production(base, "2026-06-15", produite=11_000, of_numero="OF-JUIN")
+    inserer_production(base, "2026-07-15", produite=13_200, of_numero="OF-JUIL")
+
+    comparaison = agregation.comparer_periodes(
+        base, 1, ("2026-06-15", "2026-06-15"), ("2026-07-15", "2026-07-15"),
+    )
+
+    # Lecture réelle : chaque période avec la cadence en vigueur à ses dates.
+    assert comparaison["reelle"]["a"]["TRS"] == pytest.approx(0.8041, abs=1e-4)
+    assert comparaison["reelle"]["b"]["TRS"] == pytest.approx(0.7719, abs=1e-4)
+    assert comparaison["reelle"]["ecart_trs"] == pytest.approx(-0.0322, abs=1e-4)
+
+    # Lecture à cadence constante : la barre est la même des deux côtés.
+    assert comparaison["cadence_constante"] == 30
+    assert comparaison["constante"]["a"]["TRS"] == pytest.approx(0.6433, abs=1e-4)
+    assert comparaison["constante"]["b"]["TRS"] == pytest.approx(0.7719, abs=1e-4)
+    assert comparaison["constante"]["ecart_trs"] == pytest.approx(0.1286, abs=1e-4)
+
+    # Le changement de cadence est signalé : comparer sans le savoir est trompeur.
+    assert comparaison["changements_cadence"] == ["2026-07-01"]
+    assert "cadence de référence a changé" in comparaison["avertissement"]
+
+
+def test_comparaison_sans_changement_de_cadence(base):
+    # Deux périodes du même mois : aucun avertissement, et les deux lectures
+    # coïncident puisque la cadence est identique de part et d'autre.
+    inserer_production(base, "2026-07-13", produite=12_000, of_numero="OF-1")
+    inserer_production(base, "2026-07-15", produite=13_200, of_numero="OF-2")
+    comparaison = agregation.comparer_periodes(
+        base, 1, ("2026-07-13", "2026-07-13"), ("2026-07-15", "2026-07-15"),
+    )
+    assert comparaison["avertissement"] is None
+    assert comparaison["changements_cadence"] == []
+    assert comparaison["reelle"]["ecart_trs"] == pytest.approx(
+        comparaison["constante"]["ecart_trs"], abs=1e-12
+    )
+
+
+def test_cadence_constante_ne_modifie_pas_les_indicateurs_publies(base):
+    # Le mode « à cadence constante » sert à comparer, jamais à publier :
+    # il ne doit rien changer au calcul par défaut.
+    inserer_production(base, "2026-06-15", produite=11_000)
+    reference = temps.cascade_journaliere(base, 1, "2026-06-15", "2026-06-15")
+    agregation.comparer_periodes(
+        base, 1, ("2026-06-15", "2026-06-15"), ("2026-07-15", "2026-07-15"),
+    )
+    apres = temps.cascade_journaliere(base, 1, "2026-06-15", "2026-06-15")
+    assert apres.iloc[0]["Tu"] == reference.iloc[0]["Tu"]
+    assert indicateurs.indicateurs_periode(apres)["TRS"] == pytest.approx(
+        indicateurs.indicateurs_periode(reference)["TRS"]
+    )
+
+
 def test_vue_famille_historique_et_actuelle(base):
     # ART-001 produit en juillet dans Famille A, puis reclassé en Famille B en août.
     inserer_production(base, "2026-07-13", article="ART-001", produite=6_000)

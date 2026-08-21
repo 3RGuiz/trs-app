@@ -117,6 +117,74 @@ def temps_arrets_jour(
     return resultat
 
 
+def verifier_element_en_service(
+    conn: sqlite3.Connection, element_id: int | None, d: date | str
+) -> str | None:
+    """Alerte si l'élément d'origine n'était pas en service à la date de l'arrêt.
+
+    Non bloquant (CDC §4.6) : mieux vaut conserver l'arrêt avec une alerte que
+    perdre l'information. Signale un matériel déposé, pas encore installé, ou
+    une date d'effet mal saisie au référentiel.
+    """
+    if element_id is None:
+        return None
+    element = conn.execute(
+        "SELECT libelle, date_debut, date_fin FROM element_ligne WHERE id = ?",
+        (element_id,),
+    ).fetchone()
+    if element is None:
+        return f"L'élément n° {element_id} n'existe pas."
+    jour = iso(d)
+    if jour < element["date_debut"]:
+        return (
+            f"« {element['libelle']} » n'était pas encore en service le "
+            f"{date.fromisoformat(jour):%d/%m/%Y} (mise en service le "
+            f"{date.fromisoformat(element['date_debut']):%d/%m/%Y})."
+        )
+    if element["date_fin"] and jour > element["date_fin"]:
+        return (
+            f"« {element['libelle']} » était déjà retiré du service le "
+            f"{date.fromisoformat(jour):%d/%m/%Y} (retrait le "
+            f"{date.fromisoformat(element['date_fin']):%d/%m/%Y})."
+        )
+    return None
+
+
+def _verifier_capacite_du_jour(
+    conn: sqlite3.Connection, ligne_id: int, d: date | str,
+    categorie: str | None, arrete_ligne: int, duree_ajoutee: float,
+) -> None:
+    """Refuse un arrêt qui ferait dépasser le temps disponible du jour (CDC §5.4).
+
+    Les arrêts propres ne peuvent pas excéder le temps requis, ni les arrêts hors
+    requis le temps d'ouverture : au-delà, c'est une erreur de saisie ou de
+    calendrier, et la cascade produirait un temps de fonctionnement négatif.
+    Le contrôle porte sur l'UNION des arrêts déjà saisis plus celui-ci, et ne
+    concerne que les arrêts qui ont réellement stoppé la ligne.
+    """
+    from core.erreurs import ErreurMetier
+    from core import temps as temps_module
+
+    if arrete_ligne != 1 or categorie is None:
+        return
+    to_min, tr_min = temps_module.calendrier_du_jour(conn, ligne_id, d)
+    plafond, libelle_plafond = (
+        (tr_min, "temps requis") if categorie == "ARRET_PROPRE"
+        else (to_min, "temps d'ouverture")
+    )
+    if plafond == 0:
+        return   # journée fermée : le calendrier est à corriger, pas l'arrêt
+    deja = temps_arrets_jour(conn, ligne_id, d)[categorie]
+    if deja + duree_ajoutee > plafond:
+        raise ErreurMetier(
+            f"Cet arrêt porterait le total des arrêts du "
+            f"{date.fromisoformat(iso(d)):%d/%m/%Y} à "
+            f"{deja + duree_ajoutee:.0f} minutes, au-delà du {libelle_plafond} "
+            f"de la journée ({plafond} minutes). Vérifiez l'horaire saisi, "
+            "ou le calendrier de cette journée depuis le référentiel."
+        )
+
+
 def saisir_arret(
     conn: sqlite3.Connection,
     ligne_id: int,
@@ -129,8 +197,15 @@ def saisir_arret(
     arrete_ligne: int = 1,
     commentaire: str | None = None,
     import_id: int | None = None,
+    controler_capacite: bool = True,
 ) -> int:
-    """Enregistre un arrêt. La durée est déduite des horodatages quand ils existent."""
+    """Enregistre un arrêt. La durée est déduite des horodatages quand ils existent.
+
+    Retourne l'identifiant de l'arrêt créé. Lève une erreur métier si la fin
+    précède le début, ou si le cumul dépasserait le temps disponible du jour.
+    L'alerte « élément hors service » s'obtient séparément par
+    verifier_element_en_service() : elle n'empêche pas la saisie.
+    """
     from core.erreurs import ErreurMetier
 
     debut_dt, fin_dt = _en_datetime(debut), _en_datetime(fin)
@@ -148,6 +223,17 @@ def saisir_arret(
             "Un arrêt doit porter soit ses horodatages de début et de fin, "
             "soit à défaut une durée en minutes."
         )
+    if duree_min < 0:
+        raise ErreurMetier("La durée d'un arrêt ne peut pas être négative.")
+
+    if controler_capacite:
+        from core import motifs as motifs_module
+        _verifier_capacite_du_jour(
+            conn, ligne_id, d,
+            motifs_module.categorie_motif(conn, motif_id, d),
+            arrete_ligne, float(duree_min),
+        )
+
     cur = conn.execute(
         "INSERT INTO arret (date, ligne_id, element_id, motif_id, debut, fin,"
         " duree_min, arrete_ligne, commentaire, import_id)"

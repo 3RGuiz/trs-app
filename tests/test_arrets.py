@@ -95,6 +95,67 @@ def test_fin_avant_debut_refusee(base):
                       debut="2026-07-15 09:00", fin="2026-07-15 08:00")
 
 
+# Validations du CDC §4.6 : un cumul d'arrêts ne peut pas dépasser le temps
+# disponible du jour — au-delà, c'est une erreur de saisie ou de calendrier.
+def test_cumul_d_arrets_superieur_au_temps_requis_refuse(base):
+    from core.erreurs import ErreurMetier
+
+    # Tr = 570 min. Un premier arrêt de 500 min passe.
+    inserer_arret(base, JOUR_JUILLET, "PANNE",
+                  debut="2026-07-15 06:00", fin="2026-07-15 14:20")
+    # Le second porterait le cumul à 620 min : refusé, avec explication.
+    with pytest.raises(ErreurMetier, match="temps requis"):
+        inserer_arret(base, JOUR_JUILLET, "PANNE",
+                      debut="2026-07-15 15:00", fin="2026-07-15 17:00")
+    # L'arrêt refusé n'a pas été enregistré.
+    assert base.execute(
+        "SELECT COUNT(*) FROM arret WHERE date = ?", (JOUR_JUILLET.isoformat(),)
+    ).fetchone()[0] == 1
+
+
+def test_arrets_hors_requis_plafonnes_au_temps_d_ouverture(base):
+    from core.erreurs import ErreurMetier
+
+    # To = 840 min pour les arrêts hors requis, pas 570.
+    inserer_arret(base, JOUR_JUILLET, "NETTOYAGE",
+                  debut="2026-07-15 06:00", fin="2026-07-15 16:00")   # 600 min
+    with pytest.raises(ErreurMetier, match="temps d'ouverture"):
+        inserer_arret(base, JOUR_JUILLET, "NETTOYAGE",
+                      debut="2026-07-15 16:00", fin="2026-07-15 21:00")   # +300
+
+
+def test_arret_absorbe_echappe_au_plafond(base):
+    # Un arrêt à arrete_ligne = 0 n'entre pas dans la cascade : il ne consomme
+    # aucun temps et ne doit donc pas être plafonné.
+    inserer_arret(base, JOUR_JUILLET, "PANNE",
+                  debut="2026-07-15 06:00", fin="2026-07-15 15:00")   # 540 min
+    inserer_arret(base, JOUR_JUILLET, "PANNE", arrete_ligne=0,
+                  debut="2026-07-15 16:00", fin="2026-07-15 20:00")   # +240 absorbées
+    assert arrets.temps_arrets_jour(base, 1, JOUR_JUILLET)["ARRET_PROPRE"] == 540
+
+
+def test_alerte_element_hors_service(base, arbre):
+    # Non bloquant : mieux vaut conserver l'arrêt avec une alerte que perdre
+    # l'information (CDC §4.6).
+    from core import elements
+    elements.retirer_element(base, arbre["machine1"], "2026-07-01")
+
+    alerte = arrets.verifier_element_en_service(base, arbre["machine1"], JOUR_JUILLET)
+    assert alerte is not None and "retiré du service" in alerte
+    # La saisie reste possible.
+    arret_id = inserer_arret(base, JOUR_JUILLET, "PANNE",
+                             element_id=arbre["machine1"], duree=20)
+    assert arret_id is not None
+    # Aucune alerte quand l'élément est bien en service.
+    assert arrets.verifier_element_en_service(base, arbre["machine2"], JOUR_JUILLET) is None
+
+
+def test_duree_negative_refusee(base):
+    from core.erreurs import ErreurMetier
+    with pytest.raises(ErreurMetier):
+        inserer_arret(base, JOUR_JUILLET, "PANNE", duree=-10)
+
+
 def test_pareto_origine_non_renseignee(base):
     inserer_arret(base, JOUR_JUILLET, "PANNE", duree=15)   # sans élément d'origine
     pareto = arrets.pareto(base, 1, JOUR_JUILLET, JOUR_JUILLET, par="element")
