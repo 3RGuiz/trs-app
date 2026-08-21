@@ -15,6 +15,10 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
+# ---- Mise en service Windows : binaires, reconstruits à la demande ----
+paquets/
+python-embed/
+
 # ---- Systèmes ----
 .DS_Store
 Thumbs.db

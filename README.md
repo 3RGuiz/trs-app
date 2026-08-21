@@ -5,15 +5,26 @@ indicateurs TRS / TRG / TRE d'une ligne de production à partir d'une extraction
 
 ## Installation
 
+Développement (macOS, Linux) :
+
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
+
+Poste d'exploitation (Windows) : double-clic sur `preparer_poste.bat`, une seule
+fois. La procédure complète, y compris l'installation sans accès à internet, est
+dans `docs/Mise_en_service_Windows.md`.
 
 ## Lancement
 
 ```bash
-streamlit run app.py        # ou lancer.bat sous Windows, lancer.sh sous macOS
+./lancer.sh                 # macOS, Linux
 ```
+
+Sous Windows : double-clic sur `lancer.bat`, ou sur le raccourci créé au bureau.
+La fenêtre de commandes doit rester ouverte pendant l'utilisation : c'est elle
+qui fait tourner l'application.
 
 ## Tests
 
