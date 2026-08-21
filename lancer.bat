@@ -22,8 +22,13 @@ if not defined PYTHON (
     exit /b 1
 )
 
-"%PYTHON%" -c "import streamlit" >nul 2>nul
-if errorlevel 1 (
+rem Verification par simple presence du dossier : importer Streamlit ici
+rem couterait plusieurs secondes au demarrage, pour rien.
+set "COMPOSANTS="
+if exist ".venv\Lib\site-packages\streamlit" set "COMPOSANTS=1"
+if exist "python-embed\Lib\site-packages\streamlit" set "COMPOSANTS=1"
+
+if not defined COMPOSANTS (
     echo.
     echo   L'installation de l'application est incomplete.
     echo.
@@ -37,6 +42,9 @@ if errorlevel 1 (
 echo.
 echo   Demarrage de l'application...
 echo   Votre navigateur va s'ouvrir sur la page d'accueil.
+echo.
+echo   La toute premiere ouverture demande quelques secondes de
+echo   plus que les suivantes : c'est normal.
 echo.
 echo   IMPORTANT : laissez cette fenetre ouverte tant que vous utilisez
 echo   l'application. Pour quitter, fermez cette fenetre.

@@ -98,6 +98,26 @@ Deux points à expliquer à l'utilisateur :
 - **pour quitter, on ferme cette fenêtre** — fermer l'onglet du navigateur ne
   suffit pas.
 
+### Temps d'attente à prévoir
+
+| Moment | Durée | Se reproduit-il ? |
+|---|---|---|
+| `preparer_poste.bat` | quelques minutes | Non — une seule fois par poste |
+| Premier démarrage de la journée | quelques secondes | À chaque première ouverture, l'antivirus examinant les fichiers |
+| Démarrages suivants | 1 à 3 secondes | Oui, mais plus rapide : le système garde les fichiers en mémoire |
+| Affichage d'un écran | moins d'une seconde | — |
+| Analyse sur une année entière | moins d'une seconde | — |
+
+Mesures relevées sur le poste de développement, avec un volume représentatif de
+trois ans d'historique (7 800 lignes de production) : serveur prêt en 0,6 s,
+analyse annuelle en 0,25 s, analyse sur trois ans en 0,9 s. Comptez deux à
+quatre fois plus sur un poste Windows d'entreprise, l'antivirus examinant chaque
+fichier lu au premier démarrage.
+
+**Les composants ne sont jamais réinstallés au démarrage** : `lancer.bat`
+vérifie seulement qu'ils sont présents, ce qui est instantané. Seul
+`preparer_poste.bat` installe, et vous ne le relancez que pour une mise à jour.
+
 ### Créer le raccourci sur le bureau
 
 Clic droit sur `lancer.bat` → **Envoyer vers** → **Bureau (créer un raccourci)**.
