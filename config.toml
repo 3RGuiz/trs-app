@@ -1,0 +1,3 @@
+# Paramètres non sensibles de l'application. Le chemin est relatif à ce dossier.
+[base]
+chemin = "data/trs.db"
