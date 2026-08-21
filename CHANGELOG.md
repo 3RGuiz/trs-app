@@ -6,6 +6,34 @@ dont les tests passent.
 
 ---
 
+## v0.2 — 21/08/2026 — Écrans d'analyse et de saisie
+
+### Nouveautés
+
+- Sept écrans : accueil, import, référentiel, rendement, TRS, paramètres,
+  arrêts et aide. L'application se pilote entièrement depuis l'interface.
+- **Import guidé** : choix du fichier, association des colonnes mémorisée d'un
+  import à l'autre, aperçu des différences avant écriture, rapport détaillé.
+- **Référentiel** : cadences, calendrier, familles, motifs, composition de la
+  ligne et paramètres de calcul, tous datés. Chaque changement demande une date
+  d'effet et un motif écrit, consultables dans le journal des modifications.
+- **Écran TRS** : cascade des temps, évolution, origine des arrêts par motif,
+  par zone ou par équipement, et comparaison de deux périodes.
+- **Comparaison à cadence constante** : quand la cadence de référence change,
+  le TRS baisse mécaniquement sans qu'aucune performance n'ait reculé. Les deux
+  lectures sont affichées côte à côte pour montrer le progrès réel.
+- **Saisie des arrêts** avec création de motif sans quitter l'écran, recherche
+  de libellés proches, et contrôle du cumul par rapport au temps disponible.
+- Chaque graphique propose une vue tableau équivalente.
+
+### À savoir avant de mettre à jour
+
+- L'application n'écoute plus que sur le poste local et n'envoie plus aucune
+  statistique d'usage.
+- L'export Excel des résultats et la notice utilisateur restent à produire.
+
+---
+
 ## v0.1 — 21/08/2026 — Socle, moteur de calcul et import
 
 ### Nouveautés
