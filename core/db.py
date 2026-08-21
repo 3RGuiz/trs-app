@@ -47,6 +47,26 @@ def ouvrir_connexion(chemin: Path | str) -> sqlite3.Connection:
     return conn
 
 
+# Tables attendues par l'application : leur présence sert à savoir si la base
+# est déjà initialisée, sans avoir à réécrire le schéma à chaque ouverture.
+TABLES_ATTENDUES = frozenset({
+    "famille", "article", "article_famille", "article_format", "ligne",
+    "element_ligne", "cadence", "motif_arret", "motif_classement", "motif_element",
+    "calendrier_type", "calendrier_exception", "objectif", "production", "arret",
+    "import_log", "journal_referentiel", "parametre", "parametre_date",
+})
+
+
+def base_initialisee(conn: sqlite3.Connection) -> bool:
+    """Vrai si toutes les tables attendues existent déjà."""
+    presentes = {
+        ligne[0] for ligne in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    return TABLES_ATTENDUES.issubset(presentes)
+
+
 def creer_schema(conn: sqlite3.Connection) -> None:
     """Crée les tables si elles n'existent pas et amorce les référentiels génériques."""
     schema = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
@@ -91,11 +111,17 @@ def _amorcer_parametres_par_defaut(conn: sqlite3.Connection) -> None:
 
 
 def ouvrir_base(chemin: Path | str) -> sqlite3.Connection:
-    """Ouvre la base en créant le schéma au premier lancement."""
+    """Ouvre la base, en créant le schéma seulement s'il manque.
+
+    L'interface rouvre la base à chaque affichage de page : réécrire le schéma
+    à chaque fois multiplierait les écritures concurrentes sur un fichier que
+    plusieurs onglets — voire plusieurs instances — peuvent partager.
+    """
     chemin = Path(chemin)
     chemin.parent.mkdir(parents=True, exist_ok=True)
     conn = ouvrir_connexion(chemin)
-    creer_schema(conn)
+    if not base_initialisee(conn):
+        creer_schema(conn)
     return conn
 
 
