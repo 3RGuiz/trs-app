@@ -34,12 +34,12 @@ Beaucoup de postes de production n'ont pas accès à internet. Préparez donc le
 composants à l'avance, depuis le Mac :
 
 ```bash
-./preparer_paquets_windows.sh
+./preparer_composants_windows.sh
 ```
 
-Le script crée un dossier `paquets/` d'environ 90 Mo contenant les composants
+Le script crée un dossier `composants/` d'environ 90 Mo contenant les composants
 au format Windows 64 bits. Il suppose Python 3.12 sur le poste cible ; pour une
-autre version, passez-la en argument (`./preparer_paquets_windows.sh 3.11`).
+autre version, passez-la en argument (`./preparer_composants_windows.sh 3.11`).
 
 Ce dossier n'est **pas** versionné : il se reconstruit à la demande.
 
@@ -47,7 +47,7 @@ Ce dossier n'est **pas** versionné : il se reconstruit à la demande.
 
 ## 2. Copier le dossier sur le poste Windows
 
-Copiez le dossier du projet **entier** — dossier `paquets/` inclus — vers le
+Copiez le dossier du projet **entier** — dossier `composants/` inclus — vers le
 poste, par le SharePoint synchronisé ou une clé USB.
 
 Deux règles à respecter :
@@ -77,7 +77,7 @@ C'est la seule dépendance externe de l'application.
 Double-cliquez sur **`preparer_poste.bat`**.
 
 Le script trouve Python, crée l'environnement de l'application dans le dossier
-`.venv`, installe les composants — depuis le dossier `paquets/` s'il est
+`.venv`, installe les composants — depuis le dossier `composants/` s'il est
 présent, sinon depuis internet — puis vérifie que l'installation est complète.
 
 À faire **une seule fois**. En cas d'échec, le message affiché indique quoi
@@ -88,15 +88,21 @@ d'écriture dans le dossier.
 
 ## 5. Démarrer l'application
 
-Double-cliquez sur **`lancer.bat`**. Une fenêtre noire s'ouvre, puis le
-navigateur affiche l'application.
+Double-cliquez sur **`lancer.bat`**. Une petite fenêtre « Rendement et TRS de
+la ligne » s'affiche et annonce l'avancement du démarrage, puis le navigateur
+s'ouvre sur l'application.
 
-Deux points à expliquer à l'utilisateur :
+Trois points à expliquer à l'utilisateur :
 
-- **la fenêtre noire doit rester ouverte** pendant toute l'utilisation : c'est
-  elle qui fait tourner l'application ;
-- **pour quitter, on ferme cette fenêtre** — fermer l'onglet du navigateur ne
-  suffit pas.
+- **cette fenêtre doit rester ouverte** pendant toute l'utilisation : c'est elle
+  qui fait tourner l'application ;
+- **pour quitter, on clique sur « Arrêter l'application »** — fermer l'onglet du
+  navigateur ne suffit pas ;
+- le bouton **« Rouvrir dans le navigateur »** sert quand l'onglet a été fermé
+  par mégarde.
+
+Un second double-clic sur le raccourci ne relance pas l'application : il rouvre
+simplement la page existante.
 
 ### Temps d'attente à prévoir
 
@@ -156,15 +162,15 @@ sur ce poste — pas sur le Mac de développement.
 | L'antivirus met `lancer.bat` en quarantaine | Politique de sécurité du poste | Demander une exception sur le dossier de l'application. Cela ne se règle pas avec du code |
 | « L'application n'est pas encore installée » | `preparer_poste.bat` n'a pas été lancé, ou a échoué | Le relancer et lire le message affiché |
 | « Aucun Python n'est installé sur ce poste » | Python absent ou non ajouté au PATH | Étape 3 ci-dessus |
-| L'installation échoue sans internet | Dossier `paquets/` absent | Le récupérer depuis le poste de développement (étape 1) |
-| Le navigateur affiche une page d'erreur générique | Une erreur inattendue de l'application | Le détail est écrit dans la fenêtre noire : le transmettre au responsable de l'outil |
-| L'application semble figée après une modification du code | Une ancienne instance tourne encore | Fermer toutes les fenêtres noires, puis relancer |
+| L'installation échoue sans internet | Dossier `composants/` absent | Le récupérer depuis le poste de développement (étape 1) |
+| Le navigateur affiche une page d'erreur générique | Une erreur inattendue de l'application | Le détail s'affiche dans la fenêtre de l'application : le transmettre au responsable de l'outil |
+| L'application semble figée après une modification du code | Une ancienne instance tourne encore | Cliquer sur « Arrêter l'application », puis relancer |
 
 ---
 
 ## 8. Mettre à jour l'application
 
-1. Fermer l'application (fermer la fenêtre noire) ;
+1. Fermer l'application (bouton « Arrêter l'application ») ;
 2. sauvegarder `data\trs.db` par simple copie ;
 3. remplacer les fichiers de code par la nouvelle version, **sans toucher au
    dossier `data`** ;

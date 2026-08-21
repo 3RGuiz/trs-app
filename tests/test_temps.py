@@ -24,7 +24,7 @@ def test_resolution_calendrier(base):
     assert temps.calendrier_du_jour(base, 1, JOUR_JUILLET) == (0, 0)
 
 
-# Invariant 10 — absence de conversion horaire : 1 ppm, 300 paquets -> Tu = 300 min.
+# Invariant 10 — absence de conversion horaire : 1 ppm, 300 UVC -> Tu = 300 min.
 # Test volontairement trivial : il attrape le facteur 60 parasite.
 def test_aucun_facteur_60(base):
     base.execute("DELETE FROM cadence")

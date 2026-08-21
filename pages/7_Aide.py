@@ -71,10 +71,10 @@ Le TRS est le produit des trois premiers : **TRS = TQ × TP × DO**.
 st.subheader("Exemple chiffré, à vérifier à la calculatrice")
 st.markdown(
     """
-Cadence de référence 30 paquets par minute, temps requis 9 h 30, soit 570 minutes.
+Cadence de référence 30 UVC par minute, temps requis 9 h 30, soit 570 minutes.
 
-- Quantité produisible : 30 × 570 = **17 100 paquets**
-- Quantité réellement produite : **13 200 paquets**
+- Quantité produisible : 30 × 570 = **17 100 UVC**
+- Quantité réellement produite : **13 200 UVC**
 - TRS = 13 200 / 17 100 = **77,2 %**
 
 C'est la même chose que Tu / Tr : 13 200 / 30 = 440 minutes de temps utile,

@@ -2,14 +2,21 @@
 chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
-title Application TRS - rendement et TRS de la ligne
+title Application TRS
 
 rem Lanceur Windows. Double-cliquez sur ce fichier pour demarrer l'application.
 rem La preparation du poste se fait une seule fois, avec preparer_poste.bat.
 
 set "PYTHON="
-if exist ".venv\Scripts\python.exe" set "PYTHON=.venv\Scripts\python.exe"
-if not defined PYTHON if exist "python-embed\python.exe" set "PYTHON=python-embed\python.exe"
+set "PYTHONW="
+if exist ".venv\Scripts\python.exe" (
+    set "PYTHON=.venv\Scripts\python.exe"
+    set "PYTHONW=.venv\Scripts\pythonw.exe"
+)
+if not defined PYTHON if exist "python-embed\python.exe" (
+    set "PYTHON=python-embed\python.exe"
+    set "PYTHONW=python-embed\pythonw.exe"
+)
 
 if not defined PYTHON (
     echo.
@@ -39,18 +46,23 @@ if not defined COMPOSANTS (
     exit /b 1
 )
 
+rem pythonw.exe : la fenetre de demarrage suffit, pas de console noire.
+if exist "%PYTHONW%" (
+    start "" "%PYTHONW%" demarrer.py
+    exit /b 0
+)
+
+rem Sans pythonw, on garde la console et on affiche l'avancement dedans.
 echo.
 echo   Demarrage de l'application...
-echo   Votre navigateur va s'ouvrir sur la page d'accueil.
-echo.
-echo   La toute premiere ouverture demande quelques secondes de
-echo   plus que les suivantes : c'est normal.
+echo   La toute premiere ouverture demande quelques secondes de plus
+echo   que les suivantes : c'est normal.
 echo.
 echo   IMPORTANT : laissez cette fenetre ouverte tant que vous utilisez
 echo   l'application. Pour quitter, fermez cette fenetre.
 echo.
 
-"%PYTHON%" -m streamlit run app.py
+"%PYTHON%" demarrer.py --console
 
 if errorlevel 1 (
     echo.

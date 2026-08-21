@@ -57,14 +57,14 @@ produisible = df[df["etat"] == temps.ETAT_OK]["qte_produisible_tr"].dropna().sum
 
 cartes = st.columns(4)
 cartes[0].metric("Quantité produite",
-                 theme.format_nombre(resultat["qte_produite"]) + " paquets")
+                 theme.format_nombre(resultat["qte_produite"]) + " UVC")
 cartes[1].metric("Quantité produisible sur le temps requis",
-                 theme.format_nombre(produisible) + " paquets" if produisible
+                 theme.format_nombre(produisible) + " UVC" if produisible
                  else "n/a")
 if produisible:
     ecart = resultat["qte_produite"] - produisible
     cartes[2].metric("Écart à la capacité",
-                     theme.format_nombre(ecart) + " paquets",
+                     theme.format_nombre(ecart) + " UVC",
                      delta=theme.format_taux(ecart / produisible))
 cartes[3].metric("Temps requis cumulé", theme.format_duree(resultat["Tr"]))
 

@@ -1,6 +1,6 @@
 """Construction de la cascade des temps Tt -> To -> Tr -> Tf -> Tn -> Tu (CDC §5.1).
 
-Unité de travail : la minute. La cadence étant en paquets PAR MINUTE,
+Unité de travail : la minute. La cadence étant en UVC PAR MINUTE,
 quantité / cadence donne directement des minutes : aucun facteur 60 ici.
 
 La cascade est calculée par jour, pour une ligne. L'agrégation (semaine, mois...)
@@ -194,7 +194,7 @@ def _cascade_du_jour(
         sans_cadence = du_jour["valeur_ppm"].isna()
         base["lignes_sans_cadence"] = int(sans_cadence.sum())
         valides = du_jour[~sans_cadence]
-        # quantité / cadence -> minutes, directement (paquets / (paquets/minute)).
+        # quantité / cadence -> minutes, directement (UVC / (UVC/minute)).
         base["Tu"] = float((valides["qte_produite"] / valides["valeur_ppm"]).sum())
         base["qte_produite"] = float(valides["qte_produite"].sum())
         base["qte_planifiee"] = float(valides["qte_planifiee"].fillna(0).sum())

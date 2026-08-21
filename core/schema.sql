@@ -1,6 +1,6 @@
 -- Schéma complet de la base TRS (CDC §4).
 -- Toutes les dates sont stockées en texte ISO (AAAA-MM-JJ), tous les temps en minutes,
--- toutes les quantités en paquets, toutes les cadences en paquets par minute.
+-- toutes les quantités en UVC, toutes les cadences en UVC par minute.
 -- Règle générale : les référentiels sont historisés (date_debut / date_fin, NULL = en vigueur)
 -- et ne se modifient jamais en place. Les données de production et d'arrêts sont des faits,
 -- non historisés : elles se corrigent par réimport.

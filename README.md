@@ -2,6 +2,8 @@
 
 Application locale, mono-poste, sans serveur. Calcule le taux de réalisation et les
 indicateurs TRS / TRG / TRE d'une ligne de production à partir d'une extraction ERP.
+Les quantités sont exprimées en UVC, les cadences en UVC par minute, les temps
+en minutes.
 
 ## Installation
 
@@ -23,8 +25,8 @@ dans `docs/Mise_en_service_Windows.md`.
 ```
 
 Sous Windows : double-clic sur `lancer.bat`, ou sur le raccourci créé au bureau.
-La fenêtre de commandes doit rester ouverte pendant l'utilisation : c'est elle
-qui fait tourner l'application.
+Une fenêtre annonce le démarrage, puis reste à l'écran : elle fait tourner
+l'application et porte le bouton « Arrêter l'application ».
 
 ## Tests
 

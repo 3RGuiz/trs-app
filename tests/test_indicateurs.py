@@ -22,7 +22,7 @@ def _resultat_jour(conn, jour=JOUR_JUILLET):
 
 # ---------------------------------------------------------------- cas de référence
 
-# CDC §5.2 bis : cadence 30 ppm, To 840, Tr 570, 13 200 paquets produits,
+# CDC §5.2 bis : cadence 30 ppm, To 840, Tr 570, 13 200 UVC produites,
 # Tf 500 min (70 min d'arrêts propres), compteur ensacheuse 13 500.
 def _installer_cas_de_reference(conn, ensachee=13_500.0):
     inserer_production(conn, JOUR_JUILLET, produite=13_200, planifiee=15_000,

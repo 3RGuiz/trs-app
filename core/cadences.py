@@ -44,7 +44,7 @@ def changer_cadence(
     from core.erreurs import ErreurMetier
 
     if valeur_ppm is None or float(valeur_ppm) <= 0:
-        raise ErreurMetier("La cadence doit être un nombre de paquets par minute supérieur à zéro.")
+        raise ErreurMetier("La cadence doit être un nombre d'UVC par minute supérieur à zéro.")
     return historisation.cloturer_et_inserer(
         conn, "cadence",
         {"article_code": article_code, "ligne_id": ligne_id},

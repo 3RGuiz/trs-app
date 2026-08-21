@@ -16,7 +16,7 @@ venv/
 .ruff_cache/
 
 # ---- Mise en service Windows : binaires, reconstruits à la demande ----
-paquets/
+composants/
 python-embed/
 
 # ---- Systèmes ----
@@ -30,3 +30,7 @@ desktop.ini
 
 # ---- Vérifications locales avec des valeurs réelles ----
 tests/test_local_*.py
+
+# ---- Outils de l'assistant de développement, propres au poste ----
+.agents/
+.claude/

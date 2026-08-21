@@ -57,7 +57,7 @@ Si une demande semble les contredire, **s'arrêter et demander** plutôt que de 
    **Historique exploitable à partir du 01/06/2026** (`date_debut_historique`) : les données
    antérieures sont stockées mais exclues de toutes les analyses.
 
-4. **Cadence en ppm, temps en minutes, quantités en paquets.**
+4. **Cadence en ppm (UVC par minute), temps en minutes, quantités en UVC.**
    `quantité / cadence` donne directement des minutes. **Aucun facteur 60 dans `core/`.**
 
 4 ter. **Pas de TRS par article.**
@@ -248,7 +248,7 @@ du CDC §5.5 sont bloquants — en particulier :
 - retrait non destructif d'un équipement ou d'un motif ; suppression protégée ;
 - héritage de la liste de motifs le long de l'arborescence ;
 - idempotence de l'import ;
-- absence de facteur 60 (1 ppm, 300 paquets → Tn = 300 min) ;
+- absence de facteur 60 (1 ppm, 300 UVC → Tn = 300 min) ;
 - données manquantes distinguées d'une production nulle — jamais de TRS de 0 % pour un
   import oublié ;
 - aucune fonction d'agrégation par article ne retourne de TRS.

@@ -94,8 +94,8 @@ def test_taux_de_realisation(base):
 def test_comparaison_a_cadence_constante(base):
     """Reproduit l'illustration du CDC §4.2 sur juin et juillet 2026.
 
-    Juin  : 24 ppm, 11 000 paquets -> 80,4 % affiché
-    Juillet : 30 ppm, 13 200 paquets -> 77,2 % affiché
+    Juin  : 24 ppm, 11 000 UVC -> 80,4 % affiché
+    Juillet : 30 ppm, 13 200 UVC -> 77,2 % affiché
     La production augmente de 20 % et le TRS baisse de 3,2 points. Recalculé à
     30 ppm sur les deux mois : 64,3 % puis 77,2 %, soit +12,9 points — le progrès réel.
     """

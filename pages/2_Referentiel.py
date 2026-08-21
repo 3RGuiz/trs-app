@@ -83,7 +83,7 @@ with onglets[0]:
             titre=f"Cadence de {article}",
             table="cadence",
             cles={"article_code": article, "ligne_id": ligne["id"]},
-            champs={"valeur_ppm": {"libelle": "Cadence (paquets par minute)",
+            champs={"valeur_ppm": {"libelle": "Cadence (UVC par minute)",
                                    "type": "nombre", "minimum": 0.01, "pas": 0.5}},
             colonnes_frise={"valeur_ppm": "Cadence (ppm)"},
             cle_widget=f"cadence_{article}",

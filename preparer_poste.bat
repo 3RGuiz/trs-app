@@ -53,9 +53,9 @@ set "PYTHON=.venv\Scripts\python.exe"
 
 rem --- 3. Installer les composants ---------------------------------------
 echo.
-if exist "paquets\*.whl" (
-    echo   Installation depuis le dossier local "paquets" ^(sans internet^)...
-    "%PYTHON%" -m pip install --no-index --find-links paquets -r requirements.txt
+if exist "composants\*.whl" (
+    echo   Installation depuis le dossier local "composants" ^(sans internet^)...
+    "%PYTHON%" -m pip install --no-index --find-links composants -r requirements.txt
 ) else (
     echo   Installation depuis internet...
     "%PYTHON%" -m pip install --upgrade pip
@@ -67,7 +67,7 @@ if errorlevel 1 (
     echo   L'installation des composants a echoue.
     echo.
     echo   Si ce poste n'a pas acces a internet, demandez le dossier
-    echo   "paquets" a la personne qui vous a fourni l'application,
+    echo   "composants" a la personne qui vous a fourni l'application,
     echo   placez-le ici, puis relancez ce script.
     echo.
     pause
