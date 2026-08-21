@@ -1,0 +1,12 @@
+# Développement macOS, exploitation Windows : normaliser les fins de ligne
+* text=auto eol=lf
+
+# Fichiers Windows qui doivent garder CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binaires : jamais de conversion
+*.xlsx binary
+*.db    binary
+*.png   binary
+*.pdf   binary
