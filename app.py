@@ -5,6 +5,7 @@ Toute la logique vit dans core/ ; cette page ne fait qu'afficher.
 
 from __future__ import annotations
 
+import logging
 import tomllib
 from datetime import date, timedelta
 from pathlib import Path
@@ -12,9 +13,24 @@ from pathlib import Path
 import streamlit as st
 
 from core import db, indicateurs, temps
+from core.erreurs import ErreurMetier
 from ui import theme
 
 RACINE = Path(__file__).parent
+
+# Streamlit est configuré avec showErrorDetails = "none" : rien ne s'affiche
+# de lui-même en cas d'erreur. Tout problème doit donc être rattrapé ici et
+# expliqué en français. Le détail technique part dans la console, pour le
+# développeur, jamais à l'écran.
+journal = logging.getLogger(__name__)
+
+
+def signaler(message: str, erreur: Exception | None = None) -> None:
+    """Affiche une erreur compréhensible et interrompt la page proprement."""
+    if erreur is not None:
+        journal.exception(message)
+    st.error(message)
+    st.stop()
 
 
 def chemin_base() -> Path:
@@ -29,11 +45,36 @@ def chemin_base() -> Path:
 st.set_page_config(page_title="Rendement et TRS", layout="wide")
 st.title("Rendement et TRS de la ligne")
 
-conn = db.ouvrir_base(chemin_base())
+# Aucun st.stop() dans les blocs try : il lève une exception interne à
+# Streamlit qu'un except large intercepterait par erreur.
+try:
+    conn = db.ouvrir_base(chemin_base())
+except tomllib.TOMLDecodeError as erreur:
+    signaler(
+        "Le fichier de configuration config.toml est illisible. "
+        "Corrigez-le ou supprimez-le pour revenir aux valeurs par défaut.",
+        erreur,
+    )
+except ErreurMetier as erreur:
+    signaler(str(erreur), erreur)
+except Exception as erreur:
+    signaler(
+        f"Impossible d'ouvrir la base de données ({chemin_base()}). "
+        "Vérifiez que le fichier existe, qu'il n'est pas ouvert par un autre "
+        "programme, et que le dossier est accessible.",
+        erreur,
+    )
 
-lignes = conn.execute(
-    "SELECT * FROM ligne WHERE date_fin IS NULL ORDER BY code"
-).fetchall()
+try:
+    lignes = conn.execute(
+        "SELECT * FROM ligne WHERE date_fin IS NULL ORDER BY code"
+    ).fetchall()
+except Exception as erreur:
+    signaler(
+        "La base de données est inutilisable : la liste des lignes de production "
+        "n'a pas pu être lue. Restaurez une sauvegarde depuis la page Paramètres.",
+        erreur,
+    )
 
 if not lignes:
     st.info(
@@ -78,8 +119,25 @@ defaut_debut = defaut_fin - timedelta(days=29)
 periode_debut = col_debut.date_input("Début de période", value=defaut_debut)
 periode_fin = col_fin.date_input("Fin de période", value=defaut_fin)
 
-df = temps.cascade_journaliere(conn, ligne["id"], periode_debut, periode_fin)
-resultat = indicateurs.indicateurs_periode(df)
+if periode_debut is None or periode_fin is None:
+    signaler("Renseignez une date de début et une date de fin pour la période analysée.")
+if periode_fin < periode_debut:
+    signaler(
+        f"La fin de période ({periode_fin:%d/%m/%Y}) est antérieure à son début "
+        f"({periode_debut:%d/%m/%Y}). Inversez les deux dates."
+    )
+
+try:
+    df = temps.cascade_journaliere(conn, ligne["id"], periode_debut, periode_fin)
+    resultat = indicateurs.indicateurs_periode(df)
+except ErreurMetier as erreur:
+    signaler(str(erreur), erreur)
+except Exception as erreur:
+    signaler(
+        "Le calcul des indicateurs de la période a échoué. Vérifiez le référentiel "
+        "— cadences et calendrier — depuis la page Référentiel, puis réessayez.",
+        erreur,
+    )
 
 # ---------------------------------------------------------------- bandeau de capacité
 
