@@ -75,6 +75,28 @@ def ajouter_element(
             raise ErreurMetier("Le parent choisi appartient à une autre ligne.")
         chemin_parent = parent["chemin"]
 
+    # Un même code ne peut pas être créé deux fois à la même date de mise en
+    # service. Le cas courant n'est pas un doublon volontaire : c'est un
+    # équipement mal rattaché que l'on cherche à recréer, alors qu'il faut le
+    # déplacer — l'erreur doit le dire, pas afficher une contrainte SQL.
+    existant = conn.execute(
+        "SELECT id, libelle, parent_id, date_fin FROM element_ligne"
+        " WHERE ligne_id = ? AND code = ? AND date_debut = ?",
+        (ligne_id, code, iso(date_debut)),
+    ).fetchone()
+    if existant is not None:
+        etat = (f"retiré du service le {existant['date_fin']}"
+                if existant["date_fin"] else "toujours en service")
+        raise ErreurMetier(
+            f"Un élément « {existant['libelle']} » portant le code {code} existe "
+            f"déjà avec cette date de mise en service ({iso(date_debut)}), "
+            f"{etat}.\n\n"
+            "S'il s'agit du même équipement mal rattaché, utilisez « Déplacer » "
+            "pour le rattacher à la bonne zone : son historique et ses arrêts "
+            "sont conservés. S'il s'agit d'un équipement réellement différent, "
+            "donnez-lui un autre code ou une autre date de mise en service."
+        )
+
     with transaction(conn):
         cur = conn.execute(
             "INSERT INTO element_ligne"

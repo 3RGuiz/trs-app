@@ -14,7 +14,7 @@ import streamlit as st
 
 from core import cadences, elements, historisation, motifs
 from core.erreurs import ErreurMetier
-from ui import commun, referentiel_widget, theme
+from ui import arborescence, commun, referentiel_widget, theme
 
 st.title("Référentiel")
 
@@ -325,42 +325,28 @@ with onglets[4]:
         "indicateur. Un équipement utilisé se retire, il ne se supprime pas."
     )
     afficher_retires = st.checkbox("Afficher les éléments retirés du service")
-    tous_elements = conn.execute(
-        "SELECT * FROM element_ligne WHERE ligne_id = ? ORDER BY chemin",
-        (ligne["id"],),
-    ).fetchall()
+    arborescence.afficher_arbre(conn, ligne["id"], inclure_retires=afficher_retires)
     visibles = [
-        dict(e) for e in tous_elements
+        dict(e) for e in conn.execute(
+            "SELECT * FROM element_ligne WHERE ligne_id = ? ORDER BY chemin",
+            (ligne["id"],)).fetchall()
         if afficher_retires or e["date_fin"] is None
     ]
-    if not visibles:
-        st.info("Aucun élément déclaré. Commencez par créer une zone.")
-    else:
-        arbre_affiche = []
-        for element in visibles:
-            profondeur = element["chemin"].strip("/").count("/")
-            arbre_affiche.append({
-                "Élément": "    " * profondeur + element["libelle"],
-                "Type": element["type"].capitalize(),
-                "En service depuis": element["date_debut"],
-                "Retiré le": element["date_fin"] or "",
-                "Arrêts rattachés": elements.nb_arrets(conn, element["id"]),
-            })
-        st.dataframe(arbre_affiche, width="stretch", hide_index=True)
 
+    st.divider()
     st.markdown("**Ajouter un élément**")
+    # Le rattachement se choisit avant le reste : c'est l'oubli le plus coûteux,
+    # un équipement laissé à la racine disparaissant des analyses par zone.
+    parent = arborescence.selecteur_parent(conn, ligne["id"], cle="ajout")
     with st.form("ajouter_element"):
-        colonnes = st.columns(4)
-        libelle_element = colonnes[0].text_input("Libellé", placeholder="Zone 1")
-        type_element = colonnes[1].selectbox("Type", elements.TYPES_VALIDES,
-                                             format_func=str.capitalize)
-        en_service = [e for e in visibles if e["date_fin"] is None]
-        parent = colonnes[2].selectbox(
-            "Rattaché à", [None] + [e["id"] for e in en_service],
-            format_func=lambda v: "Racine (zone)" if v is None
-            else next(e["libelle"] for e in en_service if e["id"] == v),
-        )
-        depuis = colonnes[3].date_input("En service depuis", value=date.today())
+        colonnes = st.columns(3)
+        libelle_element = colonnes[0].text_input("Libellé", placeholder="Friteuse batch")
+        type_element = colonnes[1].selectbox(
+            "Type", elements.TYPES_VALIDES,
+            index=0 if parent is None else 1,
+            format_func=lambda v: arborescence.LIBELLES_TYPE.get(v, v))
+        depuis = colonnes[2].date_input("En service depuis", value=date.today(),
+                                        format="DD/MM/YYYY")
         if st.form_submit_button("Ajouter") and libelle_element.strip():
             try:
                 elements.ajouter_element(
@@ -373,6 +359,35 @@ with onglets[4]:
                 st.error(str(erreur))
             else:
                 st.success(f"« {libelle_element} » ajouté.")
+                st.rerun()
+
+    st.markdown("**Déplacer un élément**")
+    st.caption(
+        "À utiliser quand un équipement est rattaché à la mauvaise zone : son "
+        "historique et ses arrêts sont conservés, aucun indicateur ne bouge. "
+        "C'est toujours préférable à le supprimer puis le recréer."
+    )
+    en_service = [e for e in visibles if e["date_fin"] is None]
+    if en_service:
+        colonnes = st.columns([2, 2, 1])
+        a_deplacer = colonnes[0].selectbox(
+            "Élément à déplacer", [e["id"] for e in en_service],
+            format_func=lambda v: next(e["libelle"] for e in en_service if e["id"] == v),
+            key="deplacer_quoi")
+        zones_cibles = [e for e in en_service if e["parent_id"] is None]
+        vers = colonnes[1].selectbox(
+            "Nouvelle zone", [e["id"] for e in zones_cibles] or [None],
+            format_func=lambda v: next(
+                (e["libelle"] for e in zones_cibles if e["id"] == v), "aucune zone"),
+            key="deplacer_ou")
+        colonnes[2].write("")
+        if colonnes[2].button("Déplacer") and vers is not None:
+            try:
+                elements.deplacer_element(conn, a_deplacer, vers)
+            except ErreurMetier as erreur:
+                st.error(str(erreur))
+            else:
+                st.success("Élément déplacé. Aucun indicateur n'a changé.")
                 st.rerun()
 
     if visibles:

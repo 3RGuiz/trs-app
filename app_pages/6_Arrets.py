@@ -14,7 +14,7 @@ import streamlit as st
 
 from core import arrets, elements, motifs, temps
 from core.erreurs import ErreurMetier
-from ui import commun, theme
+from ui import arborescence, commun, theme
 
 st.title("Saisie des arrêts")
 
@@ -58,6 +58,7 @@ with st.expander("Ajouter un motif au catalogue"):
             format_func=lambda v: "Motif global (proposé partout)" if v is None
             else next(e["libelle"] for e in arbre if e["id"] == v),
             key="rattachement_motif",
+            help="Un motif rattaché à une zone est proposé sur tous ses équipements.",
         )
         if st.form_submit_button("Créer le motif") and libelle_motif.strip():
             proches = motifs.libelles_proches(conn, libelle_motif)
@@ -83,17 +84,15 @@ with st.expander("Ajouter un motif au catalogue"):
 # ---------------------------------------------------------------- saisie d'un arrêt
 
 st.subheader("Déclarer un arrêt")
-colonnes = st.columns(2)
-element_choisi = colonnes[0].selectbox(
-    "Élément à l'origine de l'arrêt", [None] + [e["id"] for e in arbre],
-    format_func=lambda v: "Origine non renseignée" if v is None
-    else next(e["libelle"] for e in arbre if e["id"] == v),
+element_choisi = arborescence.selecteur_element(
+    conn, ligne["id"], jour, cle="arret",
+    libelle="Origine de l'arrêt", autoriser_aucun=True, autoriser_zone=True,
 )
 proposes = motifs.motifs_proposes(conn, element_choisi, jour)
 if not proposes:
     st.warning("Aucun motif disponible à cette date. Créez-en un ci-dessus.")
     st.stop()
-motif_choisi = colonnes[1].selectbox(
+motif_choisi = st.selectbox(
     "Motif", [m["id"] for m in proposes],
     format_func=lambda v: next(m["libelle"] for m in proposes if m["id"] == v),
 )
