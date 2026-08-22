@@ -147,7 +147,7 @@ def selecteur(
         haut = st.columns([3, 2]) if avec_maille else [st.container()]
 
         with haut[0]:
-            st.caption("Période analysée — ce qui est pris en compte")
+            st.caption("Période analysée")
             st.segmented_control(
                 "Période", list(RACCOURCIS), key=f"{cle}_raccourci",
                 on_change=_appliquer_raccourci, label_visibility="collapsed",
@@ -155,7 +155,7 @@ def selecteur(
 
         if avec_maille:
             with haut[1]:
-                st.caption("Regrouper par — comment les résultats sont cumulés")
+                st.caption("Regrouper par")
                 if f"{cle}_maille" not in st.session_state:
                     st.session_state[f"{cle}_maille"] = st.session_state._periode_maille
                 st.segmented_control(
