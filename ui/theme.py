@@ -16,12 +16,12 @@ ESPACE_INSECABLE = "\u00a0"
 # en-t\u00eate, navigation, accents \u2014 mais ne servent jamais \u00e0 coder une donn\u00e9e :
 # les s\u00e9ries de graphiques gardent la palette fonctionnelle plus bas, valid\u00e9e
 # pour rester lisible en vision d\u00e9ficiente des couleurs (CDC \u00a77.0).
-ACCENT_PRIMAIRE = "#0069b4"      # bleu
-ACCENT_CHAUD = "#f2c230"         # jaune de l'interface
-ACCENT_CHAUD_VIF = "#ffc800"     # jaune du logo, réservé aux aplats
-ACCENT_VIF = "#e30613"           # rouge
-ANTHRACITE = "#2b2a28"
-BORDURE_CHAUDE = "#dcae22"   # jaune assombri, pour border sur fond jaune
+ACCENT_PRIMAIRE = "#0060ae"      # bleu de la charte
+ACCENT_CHAUD = "#e8bf00"         # jaune de l'interface, assourdi
+ACCENT_CHAUD_VIF = "#ffd400"     # jaune du logo, réservé aux aplats
+ACCENT_VIF = "#f00000"           # rouge de la charte
+ANTHRACITE = "#1e1f1c"
+BORDURE_CHAUDE = "#c9a600"   # jaune assombri, pour border sur fond jaune
 
 # Noms de fichiers reconnus dans assets/, par ordre de pr\u00e9f\u00e9rence. Les visuels
 # de marque ne sont pas versionn\u00e9s : l'application se passe d'eux si absents.

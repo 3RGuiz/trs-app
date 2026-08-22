@@ -16,10 +16,10 @@ toolbarMode = "minimal"
 
 [theme]
 base = "light"
-primaryColor = "#f2c230"
+primaryColor = "#ffd400"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#faf9f6"
-textColor = "#2b2a28"
+textColor = "#1e1f1c"
 borderColor = "#e6e3da"
 dataframeHeaderBackgroundColor = "#faf9f6"
 font = "sans serif"
@@ -28,8 +28,8 @@ headingFontWeights = [700, 700, 600]
 
 # Barre latérale reprenant le bandeau de la charte : fond jaune, encre noire.
 [theme.sidebar]
-backgroundColor = "#f2c230"
-secondaryBackgroundColor = "#f7d564"
-textColor = "#2b2a28"
-primaryColor = "#2b2a28"
-borderColor = "#dcae22"
+backgroundColor = "#ffd400"
+secondaryBackgroundColor = "#ffe15c"
+textColor = "#1e1f1c"
+primaryColor = "#1e1f1c"
+borderColor = "#e0b900"

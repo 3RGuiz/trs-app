@@ -47,3 +47,10 @@ referentiel_local*
 # les charge s'ils sont présents, et fonctionne sans.
 assets/*
 !assets/.gitkeep
+
+# Aucune image a la racine du depot : les visuels vivent dans assets/, exclu.
+/*.png
+/*.jpg
+/*.jpeg
+/*.svg
+/*.webp
