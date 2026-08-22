@@ -183,6 +183,64 @@ def par_article(
     return groupe[colonnes]
 
 
+def journees_dediees(
+    conn: sqlite3.Connection,
+    ligne_id: int,
+    date_debut: date | str,
+    date_fin: date | str,
+    article_code: str,
+) -> list[date]:
+    """Jours où la ligne n'a fabriqué que cet article, et rien d'autre."""
+    lignes = conn.execute(
+        "SELECT date FROM production WHERE ligne_id = ? AND date BETWEEN ? AND ?"
+        " GROUP BY date"
+        " HAVING COUNT(DISTINCT article_code) = 1 AND MIN(article_code) = ?",
+        (ligne_id, iso(date_debut), iso(date_fin), article_code),
+    ).fetchall()
+    return [date.fromisoformat(l[0]) for l in lignes]
+
+
+def trs_journees_dediees(
+    conn: sqlite3.Connection,
+    ligne_id: int,
+    date_debut: date | str,
+    date_fin: date | str,
+    article_code: str,
+    periode: str = "semaine",
+) -> tuple[pd.DataFrame, dict]:
+    """TRS d'un produit, sur les seules journées où il occupait la ligne seul.
+
+    Ce n'est pas une exception à la règle « pas de TRS par article » (CDC
+    §5.2 ter), c'est le cas où la question ne se pose plus : quand un seul
+    produit a tourné de la journée, la totalité du temps requis lui revient, et
+    le TRS du jour est exactement le sien. Aucune répartition n'est inventée.
+
+    Retourne (évolution par période, contexte). Le contexte porte le nombre de
+    journées retenues et écartées : sans lui, l'utilisateur croirait lire le
+    TRS du produit sur toute la période.
+    """
+    from core import temps as temps_module
+
+    retenus = set(journees_dediees(conn, ligne_id, date_debut, date_fin, article_code))
+    total = conn.execute(
+        "SELECT COUNT(DISTINCT date) FROM production"
+        " WHERE ligne_id = ? AND article_code = ? AND date BETWEEN ? AND ?",
+        (ligne_id, article_code, iso(date_debut), iso(date_fin)),
+    ).fetchone()[0]
+
+    contexte = {
+        "nb_jours_dedies": len(retenus),
+        "nb_jours_produit": int(total),
+        "nb_jours_partages": int(total) - len(retenus),
+    }
+    if not retenus:
+        return pd.DataFrame(), contexte
+
+    cascade = temps_module.cascade_journaliere(conn, ligne_id, date_debut, date_fin)
+    cascade = cascade[cascade["date"].isin(retenus)]
+    return agreger_par_periode(cascade, periode), contexte
+
+
 def evolution_produit(
     conn: sqlite3.Connection,
     ligne_id: int,

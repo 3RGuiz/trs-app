@@ -83,6 +83,47 @@ def test_pas_de_trs_par_article(base):
         assert "taux_realisation" in df.columns
 
 
+# Le seul cas où un TRS par produit est exact : la journée où il occupe la ligne
+# seul. Tout le temps requis lui revient, aucune répartition n'est inventée.
+def test_trs_sur_journees_dediees(base):
+    # 13/07 : ART-001 seul.  14/07 : deux articles.  15/07 : ART-001 seul.
+    inserer_production(base, "2026-07-13", article="ART-001", produite=13_200,
+                       of_numero="OF-1")
+    inserer_production(base, "2026-07-14", article="ART-001", produite=6_000,
+                       of_numero="OF-2")
+    inserer_production(base, "2026-07-14", article="ART-002", produite=6_000,
+                       of_numero="OF-3")
+    inserer_production(base, "2026-07-15", article="ART-001", produite=10_260,
+                       of_numero="OF-4")
+
+    dedies = agregation.journees_dediees(base, 1, "2026-07-01", "2026-07-31", "ART-001")
+    assert [d.isoformat() for d in dedies] == ["2026-07-13", "2026-07-15"]
+
+    df, contexte = agregation.trs_journees_dediees(
+        base, 1, "2026-07-01", "2026-07-31", "ART-001", "jour"
+    )
+    assert contexte == {"nb_jours_dedies": 2, "nb_jours_produit": 3, "nb_jours_partages": 1}
+    # Sur une journée dédiée, le TRS du produit est celui de la ligne ce jour-là.
+    assert df.iloc[0]["TRS"] == pytest.approx(13_200 / (30 * 570), abs=1e-9)
+    assert df.iloc[1]["TRS"] == pytest.approx(10_260 / (30 * 570), abs=1e-9)
+    # La journée partagée est bien écartée : elle n'apparaît pas.
+    assert len(df) == 2
+
+
+def test_trs_journees_dediees_sans_journee_dediee(base):
+    # Produit jamais seul : aucun TRS, et le contexte dit pourquoi.
+    inserer_production(base, "2026-07-13", article="ART-001", produite=6_000,
+                       of_numero="OF-1")
+    inserer_production(base, "2026-07-13", article="ART-002", produite=6_000,
+                       of_numero="OF-2")
+    df, contexte = agregation.trs_journees_dediees(
+        base, 1, "2026-07-01", "2026-07-31", "ART-001"
+    )
+    assert df.empty
+    assert contexte["nb_jours_dedies"] == 0
+    assert contexte["nb_jours_partages"] == 1
+
+
 def test_evolution_par_produit(base):
     # Deux semaines, deux articles : le filtre doit isoler le produit demandé
     # sans jamais perdre de quantité au passage.

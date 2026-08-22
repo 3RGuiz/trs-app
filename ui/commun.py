@@ -125,10 +125,16 @@ def selecteur_produit(
     au taux de réalisation et au temps de capacité mobilisé, qui eux se
     ventilent exactement.
     """
-    articles = [a[0] for a in conn.execute(
-        "SELECT DISTINCT article_code FROM production WHERE ligne_id = ? ORDER BY 1",
-        (ligne_id,),
-    ).fetchall()]
+    # Libellés chargés en une fois : les résoudre dans le format_func relancerait
+    # une requête par option à chaque rendu.
+    libelles_articles = {
+        a["code"]: a["libelle"] for a in conn.execute(
+            "SELECT DISTINCT a.code, a.libelle FROM article a"
+            " JOIN production p ON p.article_code = a.code"
+            " WHERE p.ligne_id = ? ORDER BY a.code", (ligne_id,),
+        ).fetchall()
+    }
+    articles = list(libelles_articles)
     familles = [f[0] for f in conn.execute(
         "SELECT DISTINCT f.libelle FROM famille f"
         " JOIN article_famille af ON af.famille_id = f.id"
@@ -148,19 +154,13 @@ def selecteur_produit(
         choisie = colonnes[1].selectbox("Famille", familles, key=f"{cle}_famille")
         return None, choisie, f"famille {choisie}"
     if perimetre == "article" and articles:
-        choisi = colonnes[1].selectbox(
-            "Produit", articles, key=f"{cle}_article",
-            format_func=lambda code: f"{code} — {libelle_article(conn, code)}",
-        )
-        return choisi, None, f"produit {choisi}"
+        # Options déjà formatées plutôt qu'un format_func : le code reste lisible
+        # dans le libellé, et la valeur du widget est directement inspectable.
+        intitules = [f"{code} — {libelles_articles[code]}" for code in articles]
+        choisi = colonnes[1].selectbox("Produit", intitules, key=f"{cle}_article")
+        code = choisi.split(" — ", 1)[0] if choisi else articles[0]
+        return code, None, f"produit {code}"
     return None, None, "toute la ligne"
-
-
-def libelle_article(conn: sqlite3.Connection, code: str) -> str:
-    ligne = conn.execute(
-        "SELECT libelle FROM article WHERE code = ?", (code,)
-    ).fetchone()
-    return ligne["libelle"] if ligne else code
 
 
 def unite_ligne(ligne: dict) -> str:

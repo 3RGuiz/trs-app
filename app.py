@@ -97,6 +97,46 @@ if article or famille:
             "taux_realisation": "Taux de réalisation",
         }), width="stretch", hide_index=True)
 
+    # TRS du produit : exact uniquement les jours où il occupait la ligne seul.
+    if article:
+        st.subheader("TRS de ce produit")
+        try:
+            trs_dedie, contexte = agregation.trs_journees_dediees(
+                conn, ligne["id"], periode.debut, periode.fin, article, periode.maille
+            )
+        except Exception as erreur:
+            commun.signaler("Le TRS par journée dédiée n'a pas pu être calculé.", erreur)
+
+        if trs_dedie.empty:
+            st.info(
+                f"Pas de TRS calculable pour ce produit sur la période : il a "
+                f"toujours partagé la ligne avec d'autres références "
+                f"({contexte['nb_jours_partages']} jour(s)). Le temps requis de "
+                "ces journées ne peut être attribué à aucun produit en "
+                "particulier."
+            )
+        else:
+            st.caption(
+                f"Calculé sur les **{contexte['nb_jours_dedies']} journée(s)** où "
+                f"ce produit a occupé la ligne seul — les "
+                f"{contexte['nb_jours_partages']} journée(s) partagée(s) avec "
+                "d'autres références sont écartées, faute de pouvoir leur "
+                "attribuer le temps requis."
+            )
+            graphique, tableau = st.tabs(["Graphique", "Tableau"])
+            with graphique:
+                st.plotly_chart(
+                    graphiques.evolution_trs(trs_dedie, changements,
+                                             maille=periode.maille),
+                    width="stretch")
+            with tableau:
+                lisible = trs_dedie[["periode", "TRS", "Tu", "Tr"]].copy()
+                lisible["TRS"] = lisible["TRS"].map(theme.format_taux)
+                for colonne in ("Tu", "Tr"):
+                    lisible[colonne] = lisible[colonne].map(theme.format_duree)
+                st.dataframe(lisible.rename(columns={"periode": "Période"}),
+                             width="stretch", hide_index=True)
+
     cartes.pourquoi_pas_de_trs_par_produit()
     st.caption(
         f"Le TRS de la ligne entière sur la même période : "

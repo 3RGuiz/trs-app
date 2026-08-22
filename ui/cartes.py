@@ -96,15 +96,24 @@ def focus_produit(
 
 def pourquoi_pas_de_trs_par_produit() -> None:
     """Explique une absence, plutôt que de la laisser passer pour un oubli."""
-    st.info(
-        "**Pourquoi pas de TRS pour un produit ?** Le TRS rapporte le temps utile "
-        "au temps requis. Le temps utile se calcule bien par produit — c'est la "
-        "capacité mobilisée ci-dessus. Le temps requis, lui, ne se répartit pas : "
-        "l'extraction ERP ne dit pas combien de temps la ligne a passé sur chaque "
-        "ordre de fabrication. Un TRS par produit ne serait donc que le taux de "
-        "réalisation sous un autre nom, ou le même chiffre pour tous les produits. "
-        "Le TRS reste au niveau de la ligne, où il est exact."
-    )
+    with st.expander("Pourquoi le TRS d'un produit n'est-il calculable que certains jours ?"):
+        st.markdown(
+            "Le TRS rapporte le temps utile au temps requis. Le temps utile se "
+            "calcule bien par produit — c'est la capacité mobilisée ci-dessus. "
+            "Le temps requis, lui, ne se répartit pas : l'extraction ERP ne dit "
+            "pas combien de temps la ligne a passé sur chaque ordre de "
+            "fabrication.\n\n"
+            "**Les journées où un seul produit a tourné font exception** : tout le "
+            "temps requis lui revient, et son TRS est alors exact. C'est ce qui "
+            "est affiché ci-dessus.\n\n"
+            "Sur les journées partagées, répartir le temps requis au prorata "
+            "donnerait soit le même TRS pour tous les produits, soit le taux de "
+            "réalisation sous un autre nom — un chiffre que chacun lirait comme "
+            "un TRS sans en être un.\n\n"
+            "**Ce qui lèverait la limite** : des heures de début et de fin "
+            "d'ordre de fabrication dans l'extraction ERP. Le modèle de données "
+            "est déjà prêt à les recevoir."
+        )
 
 
 def cartes_cascade(resultat: dict) -> None:
