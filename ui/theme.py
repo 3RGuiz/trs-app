@@ -23,6 +23,14 @@ ACCENT_VIF = "#f00000"           # rouge de la charte
 ANTHRACITE = "#1e1f1c"
 BORDURE_CHAUDE = "#c9a600"   # jaune assombri, pour border sur fond jaune
 
+# Mise en page du logo dans la barre latérale. Le contour blanc est un padding :
+# le fichier fourni n'ayant aucune marge transparente, sans lui le dessin
+# toucherait le bord de la carte.
+LARGEUR_LOGO = "90%"
+LARGEUR_LOGO_MAX = "230px"
+MARGE_LOGO = "0.85rem 1rem"
+ARRONDI_LOGO = "0.9rem"
+
 # Noms de fichiers reconnus dans assets/, par ordre de pr\u00e9f\u00e9rence. Les visuels
 # de marque ne sont pas versionn\u00e9s : l'application se passe d'eux si absents.
 NOMS_LOGO = ("logo.png", "logo.svg", "logo.jpg", "logo.jpeg", "logo.webp")
@@ -103,12 +111,26 @@ def appliquer_identite(assets: Path) -> None:
     st.html(
         f"""
         <style>
-          /* Le logo se détache sur blanc, y compris dans la barre jaune. */
-          [data-testid="stSidebarHeader"], [data-testid="stLogo"] {{
+          /* Le logo, posé sur une carte blanche centrée dans la bande jaune.
+             Streamlit impose une hauteur au logo : on la libère pour qu'il
+             occupe la largeur de la barre, en gardant ses proportions. */
+          [data-testid="stLogo"] {{
+              width: {LARGEUR_LOGO} !important;
+              max-width: {LARGEUR_LOGO_MAX} !important;
+              height: auto !important;
+              max-height: none !important;
+              display: block;
+              margin: 0.4rem auto 0.9rem;
+              padding: {MARGE_LOGO};
               background: #ffffff;
-              border-radius: 0.5rem;
+              border-radius: {ARRONDI_LOGO};
+              box-sizing: border-box;
           }}
-          [data-testid="stLogo"] {{ padding: 0.35rem 0.6rem; }}
+          /* Le bloc d'en-tête laisse la place au logo agrandi. */
+          [data-testid="stSidebarHeader"] {{
+              height: auto !important;
+              padding-bottom: 0.2rem;
+          }}
 
           /* Chiffres alignés verticalement : indispensable pour comparer. */
           [data-testid="stMetricValue"] {{
