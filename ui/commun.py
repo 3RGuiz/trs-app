@@ -164,13 +164,92 @@ def selecteur_produit(
         choisie = colonnes[1].selectbox("Famille", familles, key=f"{cle}_famille")
         return None, choisie, f"famille {choisie}"
     if perimetre == "article" and articles:
-        # Options déjà formatées plutôt qu'un format_func : le code reste lisible
-        # dans le libellé, et la valeur du widget est directement inspectable.
-        intitules = [f"{code} — {libelles_articles[code]}" for code in articles]
-        choisi = colonnes[1].selectbox("Produit", intitules, key=f"{cle}_article")
-        code = choisi.split(" — ", 1)[0] if choisi else articles[0]
+        # Le produit se choisit à travers sa famille : sur cinquante références,
+        # une liste unique oblige à connaître le code par cœur.
+        rattachements = {
+            l["article_code"]: l["famille"] for l in conn.execute(
+                "SELECT af.article_code, f.libelle AS famille FROM article_famille af"
+                " JOIN famille f ON f.id = af.famille_id WHERE af.date_fin IS NULL")
+        }
+        with colonnes[1]:
+            sous = st.columns(2)
+            famille_filtre = sous[0].selectbox(
+                "Famille", [None] + familles,
+                format_func=lambda f: "Toutes" if f is None else f,
+                key=f"{cle}_filtre_famille", label_visibility="collapsed")
+            retenus = [a for a in articles
+                       if famille_filtre is None
+                       or rattachements.get(a) == famille_filtre]
+            if not retenus:
+                sous[1].caption("Aucun produit dans cette famille.")
+                return None, None, "toute la ligne"
+            intitules = [f"{code} — {libelles_articles[code]}" for code in retenus]
+            choisi = sous[1].selectbox("Produit", intitules, key=f"{cle}_article",
+                                       label_visibility="collapsed")
+        code = choisi.split(" — ", 1)[0] if choisi else retenus[0]
         return code, None, f"produit {code}"
     return None, None, "toute la ligne"
+
+
+def selecteur_article(
+    conn: sqlite3.Connection,
+    ligne_id: int | None = None,
+    cle: str = "article",
+    libelle: str = "Article",
+    tous_les_articles: bool = False,
+) -> str | None:
+    """Choix d'un article, filtré d'abord par famille.
+
+    Cinquante références dans une seule liste obligent à connaître le code par
+    cœur. En passant par la famille, on ramène le choix à quelques articles —
+    et la famille est le découpage que les gens du catalogue ont en tête.
+
+    ligne_id restreint aux articles réellement produits sur cette ligne : une
+    cadence saisie pour un article qui n'y passe jamais ne servirait à rien.
+    """
+    if ligne_id is not None and not tous_les_articles:
+        candidats = [a[0] for a in conn.execute(
+            "SELECT DISTINCT article_code FROM production WHERE ligne_id = ?"
+            " UNION SELECT DISTINCT article_code FROM cadence WHERE ligne_id = ?"
+            " ORDER BY 1", (ligne_id, ligne_id)).fetchall()]
+    else:
+        candidats = [a[0] for a in conn.execute(
+            "SELECT code FROM article WHERE actif = 1 ORDER BY code").fetchall()]
+    if not candidats:
+        return None
+
+    marques = ", ".join("?" for _ in candidats)
+    rattachements = {
+        ligne["article_code"]: ligne["famille"] for ligne in conn.execute(
+            f"SELECT af.article_code, f.libelle AS famille FROM article_famille af"
+            f" JOIN famille f ON f.id = af.famille_id"
+            f" WHERE af.date_fin IS NULL AND af.article_code IN ({marques})",
+            candidats)
+    }
+    familles = sorted({f for f in rattachements.values() if f})
+
+    colonnes = st.columns(2)
+    famille = colonnes[0].selectbox(
+        "Famille", [None] + familles,
+        format_func=lambda f: "Toutes les familles" if f is None else f,
+        key=f"{cle}_famille",
+        help="Restreint la liste des articles à cette famille.",
+    )
+    retenus = [a for a in candidats
+               if famille is None or rattachements.get(a) == famille]
+    if not retenus:
+        colonnes[1].caption("Aucun article dans cette famille sur cette ligne.")
+        return None
+
+    libelles = {
+        a["code"]: a["libelle"] for a in conn.execute(
+            f"SELECT code, libelle FROM article WHERE code IN ({marques})", candidats)
+    }
+    return colonnes[1].selectbox(
+        libelle, retenus,
+        format_func=lambda code: f"{code} — {libelles.get(code, '')}"[:70],
+        key=f"{cle}_code",
+    )
 
 
 def unite_ligne(ligne: dict) -> str:

@@ -190,6 +190,29 @@ def appliquer_identite(assets: Path) -> None:
               display: inline-block;
           }}
 
+          /* Une section repliable reste une section : son titre garde la taille
+             et le filet des autres, sinon replier un bloc le fait passer pour
+             un détail secondaire. */
+          [data-testid="stMainBlockContainer"] [data-testid="stExpander"] summary p {{
+              font-size: 1.25rem !important;
+              font-weight: 600 !important;
+              color: {ANTHRACITE};
+          }}
+          [data-testid="stMainBlockContainer"] [data-testid="stExpander"] summary {{
+              border-bottom: 3px solid {ACCENT_CHAUD};
+              padding-bottom: 0.2rem;
+              margin-bottom: 0.35rem;
+          }}
+          [data-testid="stMainBlockContainer"] [data-testid="stExpander"] details {{
+              border: none !important;
+              box-shadow: none !important;
+          }}
+          /* Un bloc replié dans un autre garde une taille moindre : la
+             hiérarchie de lecture doit rester perceptible. */
+          [data-testid="stExpander"] [data-testid="stExpander"] summary p {{
+              font-size: 1rem !important;
+          }}
+
           /* Sur fond jaune, l'encre reste noire — jamais de blanc sur jaune. */
           [data-testid="stSidebar"] button {{ color: {ANTHRACITE}; }}
           [data-testid="stSidebarNav"] a[aria-current="page"] {{

@@ -83,108 +83,108 @@ with st.expander("Ajouter un motif au catalogue"):
 
 # ---------------------------------------------------------------- saisie d'un arrêt
 
-st.subheader("Déclarer un arrêt")
-element_choisi = arborescence.selecteur_element(
-    conn, ligne["id"], jour, cle="arret",
-    libelle="Origine de l'arrêt", autoriser_aucun=True, autoriser_zone=True,
-)
-proposes = motifs.motifs_proposes(conn, element_choisi, jour)
-if not proposes:
-    st.warning("Aucun motif disponible à cette date. Créez-en un ci-dessus.")
-    st.stop()
-motif_choisi = st.selectbox(
-    "Motif", [m["id"] for m in proposes],
-    format_func=lambda v: next(m["libelle"] for m in proposes if m["id"] == v),
-)
-st.caption(
-    "La liste réunit les motifs de cet élément, ceux de ses zones parentes et "
-    "les motifs globaux."
-)
-
-with st.form("saisie_arret"):
-    colonnes = st.columns(4)
-    heure_debut = colonnes[0].time_input("Début", value=time(8, 0))
-    heure_fin = colonnes[1].time_input("Fin", value=time(8, 30))
-    arrete_ligne = colonnes[2].selectbox(
-        "La ligne s'est-elle arrêtée ?", [1, 0],
-        format_func=lambda v: "Oui — la ligne a cessé de produire" if v
-        else "Non — absorbé par un tampon",
+with st.expander("Déclarer un arrêt", expanded=True):
+    element_choisi = arborescence.selecteur_element(
+        conn, ligne["id"], jour, cle="arret",
+        libelle="Origine de l'arrêt", autoriser_aucun=True, autoriser_zone=True,
     )
-    lendemain = colonnes[3].checkbox(
-        "La fin est le lendemain", help="Pour un arrêt à cheval sur minuit."
+    proposes = motifs.motifs_proposes(conn, element_choisi, jour)
+    if not proposes:
+        st.warning("Aucun motif disponible à cette date. Créez-en un ci-dessus.")
+        st.stop()
+    motif_choisi = st.selectbox(
+        "Motif", [m["id"] for m in proposes],
+        format_func=lambda v: next(m["libelle"] for m in proposes if m["id"] == v),
     )
-    commentaire = st.text_input("Commentaire (facultatif)")
-
-    if st.form_submit_button("Enregistrer l'arrêt", type="primary"):
-        debut = datetime.combine(jour, heure_debut)
-        fin = datetime.combine(jour + timedelta(days=1) if lendemain else jour, heure_fin)
-        alerte = arrets.verifier_element_en_service(conn, element_choisi, jour)
-        if alerte:
-            st.warning(alerte + " L'arrêt est tout de même enregistré.")
-        try:
-            arrets.saisir_arret(
-                conn, ligne["id"], jour, motif_choisi, debut=debut, fin=fin,
-                element_id=element_choisi, arrete_ligne=int(arrete_ligne),
-                commentaire=commentaire.strip() or None,
-            )
-        except ErreurMetier as erreur:
-            st.error(str(erreur))
-        except Exception as erreur:
-            commun.signaler("L'arrêt n'a pas pu être enregistré.", erreur)
-        else:
-            st.success("Arrêt enregistré.")
-            st.rerun()
-
-# ---------------------------------------------------------------- récapitulatif
-
-st.subheader(f"Arrêts du {jour:%d/%m/%Y}")
-du_jour = arrets.arrets_du_jour(conn, ligne["id"], jour)
-if not du_jour:
-    st.info("Aucun arrêt déclaré ce jour.")
-else:
-    libelles = {
-        m["id"]: m["libelle"]
-        for m in conn.execute("SELECT id, libelle FROM motif_arret").fetchall()
-    }
-    noms_elements = {
-        e["id"]: e["libelle"]
-        for e in conn.execute("SELECT id, libelle FROM element_ligne").fetchall()
-    }
-    st.dataframe(
-        [{
-            "Début": (a["debut"] or "")[-8:-3] if a["debut"] else "non horodaté",
-            "Fin": (a["fin"] or "")[-8:-3] if a["fin"] else "non horodaté",
-            "Durée": theme.format_duree(a["duree_min"]),
-            "Origine": noms_elements.get(a["element_id"], "Non renseignée"),
-            "Motif": libelles.get(a["motif_id"], ""),
-            "Catégorie": "Arrêt propre" if a["categorie"] == "ARRET_PROPRE"
-                         else "Hors requis",
-            "Ligne arrêtée": "Oui" if a["arrete_ligne"] else "Non (tampon)",
-        } for a in du_jour],
-        width="stretch", hide_index=True,
-    )
-
-    cumul = arrets.temps_arrets_jour(conn, ligne["id"], jour)
-    to_min, tr_min = temps.calendrier_du_jour(conn, ligne["id"], jour)
-    cartes = st.columns(3)
-    cartes[0].metric("Arrêts propres (union)", theme.format_duree(cumul["ARRET_PROPRE"]))
-    cartes[1].metric("Hors requis (union)", theme.format_duree(cumul["HORS_REQUIS"]))
-    cartes[2].metric("Temps requis du jour", theme.format_duree(tr_min))
     st.caption(
-        "Les durées sont calculées par union des intervalles : deux arrêts "
-        "simultanés n'arrêtent la ligne qu'une fois. La somme brute des durées "
-        f"déclarées vaut {theme.format_duree(sum(a['duree_min'] for a in du_jour))}."
+        "La liste réunit les motifs de cet élément, ceux de ses zones parentes et "
+        "les motifs globaux."
     )
-    if cumul["avertissement_horodatage"]:
-        st.warning(
-            "Certains arrêts n'ont pas d'horodatage : leurs durées sont "
-            "additionnées sans détection des chevauchements possibles."
+
+    with st.form("saisie_arret"):
+        colonnes = st.columns(4)
+        heure_debut = colonnes[0].time_input("Début", value=time(8, 0))
+        heure_fin = colonnes[1].time_input("Fin", value=time(8, 30))
+        arrete_ligne = colonnes[2].selectbox(
+            "La ligne s'est-elle arrêtée ?", [1, 0],
+            format_func=lambda v: "Oui — la ligne a cessé de produire" if v
+            else "Non — absorbé par un tampon",
         )
-    if temps.mode_tr(conn, jour) == "FIXE" and cumul["HORS_REQUIS"] > 0:
-        st.info(
-            "Le mode de calcul du temps requis est FIXE : les arrêts hors requis "
-            "sont conservés pour l'analyse mais ne sont pas retranchés, sous peine "
-            "de double comptage."
+        lendemain = colonnes[3].checkbox(
+            "La fin est le lendemain", help="Pour un arrêt à cheval sur minuit."
         )
+        commentaire = st.text_input("Commentaire (facultatif)")
+
+        if st.form_submit_button("Enregistrer l'arrêt", type="primary"):
+            debut = datetime.combine(jour, heure_debut)
+            fin = datetime.combine(jour + timedelta(days=1) if lendemain else jour, heure_fin)
+            alerte = arrets.verifier_element_en_service(conn, element_choisi, jour)
+            if alerte:
+                st.warning(alerte + " L'arrêt est tout de même enregistré.")
+            try:
+                arrets.saisir_arret(
+                    conn, ligne["id"], jour, motif_choisi, debut=debut, fin=fin,
+                    element_id=element_choisi, arrete_ligne=int(arrete_ligne),
+                    commentaire=commentaire.strip() or None,
+                )
+            except ErreurMetier as erreur:
+                st.error(str(erreur))
+            except Exception as erreur:
+                commun.signaler("L'arrêt n'a pas pu être enregistré.", erreur)
+            else:
+                st.success("Arrêt enregistré.")
+                st.rerun()
+
+    # ---------------------------------------------------------------- récapitulatif
+
+with st.expander(f"Arrêts du {jour:%d/%m/%Y}", expanded=True):
+    du_jour = arrets.arrets_du_jour(conn, ligne["id"], jour)
+    if not du_jour:
+        st.info("Aucun arrêt déclaré ce jour.")
+    else:
+        libelles = {
+            m["id"]: m["libelle"]
+            for m in conn.execute("SELECT id, libelle FROM motif_arret").fetchall()
+        }
+        noms_elements = {
+            e["id"]: e["libelle"]
+            for e in conn.execute("SELECT id, libelle FROM element_ligne").fetchall()
+        }
+        st.dataframe(
+            [{
+                "Début": (a["debut"] or "")[-8:-3] if a["debut"] else "non horodaté",
+                "Fin": (a["fin"] or "")[-8:-3] if a["fin"] else "non horodaté",
+                "Durée": theme.format_duree(a["duree_min"]),
+                "Origine": noms_elements.get(a["element_id"], "Non renseignée"),
+                "Motif": libelles.get(a["motif_id"], ""),
+                "Catégorie": "Arrêt propre" if a["categorie"] == "ARRET_PROPRE"
+                             else "Hors requis",
+                "Ligne arrêtée": "Oui" if a["arrete_ligne"] else "Non (tampon)",
+            } for a in du_jour],
+            width="stretch", hide_index=True,
+        )
+
+        cumul = arrets.temps_arrets_jour(conn, ligne["id"], jour)
+        to_min, tr_min = temps.calendrier_du_jour(conn, ligne["id"], jour)
+        cartes = st.columns(3)
+        cartes[0].metric("Arrêts propres (union)", theme.format_duree(cumul["ARRET_PROPRE"]))
+        cartes[1].metric("Hors requis (union)", theme.format_duree(cumul["HORS_REQUIS"]))
+        cartes[2].metric("Temps requis du jour", theme.format_duree(tr_min))
+        st.caption(
+            "Les durées sont calculées par union des intervalles : deux arrêts "
+            "simultanés n'arrêtent la ligne qu'une fois. La somme brute des durées "
+            f"déclarées vaut {theme.format_duree(sum(a['duree_min'] for a in du_jour))}."
+        )
+        if cumul["avertissement_horodatage"]:
+            st.warning(
+                "Certains arrêts n'ont pas d'horodatage : leurs durées sont "
+                "additionnées sans détection des chevauchements possibles."
+            )
+        if temps.mode_tr(conn, jour) == "FIXE" and cumul["HORS_REQUIS"] > 0:
+            st.info(
+                "Le mode de calcul du temps requis est FIXE : les arrêts hors requis "
+                "sont conservés pour l'analyse mais ne sont pas retranchés, sous peine "
+                "de double comptage."
+            )
 
 conn.close()

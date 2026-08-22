@@ -61,47 +61,97 @@ onglets = st.tabs([
 # ---------------------------------------------------------------- cadences
 
 with onglets[0]:
+    unite = commun.unite_ligne(ligne)
     st.caption(
-        "Cadence de référence = capacité de la ligne complète, goulot inclus. "
-        "Elle évolue quand la capacité évolue, jamais pour expliquer une "
-        "contre-performance."
+        f"Cadence de référence de la ligne « {ligne['libelle']} », exprimée en "
+        f"{unite} par minute. C'est la capacité de la ligne complète, goulot "
+        "inclus : elle évolue quand la capacité évolue, jamais pour expliquer "
+        "une contre-performance."
     )
-    articles = [a[0] for a in conn.execute(
-        "SELECT code FROM article WHERE actif = 1 ORDER BY code"
-    ).fetchall()]
-    if not articles:
+
+    # Un article ne se produit pas sur toutes les lignes : proposer le
+    # catalogue entier permettrait de saisir une cadence de friture sur
+    # l'ensachage, donnée qui ne servirait jamais et fausserait la lecture.
+    articles_ligne = [a[0] for a in conn.execute(
+        "SELECT DISTINCT article_code FROM production WHERE ligne_id = ?"
+        " UNION SELECT DISTINCT article_code FROM cadence WHERE ligne_id = ?"
+        " ORDER BY 1", (ligne["id"], ligne["id"])).fetchall()]
+    tout_le_catalogue = st.checkbox(
+        "Afficher tous les articles du catalogue",
+        help="Par défaut, seuls les articles produits sur cette ligne sont "
+             "proposés. Cochez pour déclarer une cadence avant la première "
+             "production.")
+
+    article = commun.selecteur_article(
+        conn, ligne["id"], cle="cadence", tous_les_articles=tout_le_catalogue)
+    if article is None:
         st.info(
-            "Aucun article n'est encore connu. Les articles apparaissent "
-            "automatiquement au premier import, ou se créent dans l'onglet "
-            "« Articles et familles »."
+            "Aucun article n'est encore produit sur cette ligne. Les articles "
+            "apparaissent au premier import ; cochez la case ci-dessus pour "
+            "déclarer une cadence à l'avance."
         )
     else:
-        article = st.selectbox("Article", articles, key="cadence_article")
+
+        # Les articles d'une même ligne partagent le plus souvent la même
+        # cadence : proposer celle qui domine évite de repartir d'une valeur
+        # arbitraire, et rend l'écart visible quand il y en a un.
+        courante = conn.execute(
+            "SELECT valeur_ppm, COUNT(*) FROM cadence WHERE ligne_id = ?"
+            " AND date_fin IS NULL GROUP BY valeur_ppm ORDER BY COUNT(*) DESC"
+            " LIMIT 1", (ligne["id"],)).fetchone()
+        suggestion = float(courante[0]) if courante else None
+        if suggestion is not None:
+            st.caption(
+                f"Cadence la plus répandue sur cette ligne : "
+                f"{theme.format_nombre(suggestion, 2)} {unite}/min — proposée "
+                "par défaut pour un article qui n'en a pas encore."
+            )
+
         modifie = referentiel_widget.bloc_referentiel(
             conn,
             titre=f"Cadence de {article}",
             table="cadence",
             cles={"article_code": article, "ligne_id": ligne["id"]},
-            champs={"valeur_ppm": {"libelle": "Cadence (UVC par minute)",
-                                   "type": "nombre", "minimum": 0.01, "pas": 0.5}},
-            colonnes_frise={"valeur_ppm": "Cadence (ppm)"},
-            cle_widget=f"cadence_{article}",
-            avertissement="Les périodes antérieures conserveront l'ancienne cadence. "
-                          "Les comparaisons avant/après ne seront pas directement "
-                          "lisibles : utilisez la lecture à cadence constante.",
+            champs={"valeur_ppm": {
+                "libelle": f"Cadence ({unite} par minute)",
+                "type": "nombre", "minimum": 0.01, "pas": 0.5,
+                "defaut": suggestion,
+            }},
+            colonnes_frise={"valeur_ppm": f"Cadence ({unite}/min)"},
+            cle_widget=f"cadence_{ligne['id']}_{article}",
+            avertissement="Les périodes antérieures conserveront l'ancienne "
+                          "cadence. Les comparaisons avant/après ne seront pas "
+                          "directement lisibles : utilisez la lecture à cadence "
+                          "constante.",
         )
         if modifie:
             st.rerun()
 
         st.divider()
-        st.markdown("**Cadences en vigueur, tous articles**")
+        st.markdown(f"**Cadences en vigueur sur cette ligne ({unite}/min)**")
         vigueur = pd.read_sql_query(
-            "SELECT article_code AS Article, valeur_ppm AS 'Cadence (ppm)',"
-            " date_debut AS 'Depuis le' FROM cadence"
-            " WHERE ligne_id = ? AND date_fin IS NULL ORDER BY article_code",
-            conn, params=(ligne["id"],),
-        )
-        st.dataframe(vigueur, width="stretch", hide_index=True)
+            "SELECT c.article_code AS Article, a.libelle AS Libellé,"
+            " c.valeur_ppm AS Cadence, c.date_debut AS 'Depuis le'"
+            " FROM cadence c LEFT JOIN article a ON a.code = c.article_code"
+            " WHERE c.ligne_id = ? AND c.date_fin IS NULL ORDER BY c.article_code",
+            conn, params=(ligne["id"],))
+        if vigueur.empty:
+            st.info(
+                "Aucune cadence n'est encore définie sur cette ligne : ses "
+                "indicateurs resteront « non calculables » jusque-là."
+            )
+        else:
+            st.dataframe(vigueur, width="stretch", hide_index=True)
+            manquants = [a for a in articles_ligne
+                         if a not in set(vigueur["Article"])]
+            if manquants:
+                st.warning(
+                    f"{len(manquants)} article(s) produits sur cette ligne n'ont "
+                    "aucune cadence et sont exclus des indicateurs : "
+                    + ", ".join(manquants[:6])
+                    + (", …" if len(manquants) > 6 else "")
+                )
+
 
 # ---------------------------------------------------------------- calendrier
 
@@ -175,52 +225,105 @@ with onglets[2]:
         "Le rattachement d'un article à sa famille est historisé : une "
         "réorganisation du catalogue ne réécrit pas les analyses passées."
     )
-    familles = conn.execute("SELECT id, libelle FROM famille ORDER BY libelle").fetchall()
-    with st.form("creer_famille"):
-        nouvelle = st.text_input("Nouvelle famille", placeholder="Famille A")
-        if st.form_submit_button("Créer la famille") and nouvelle.strip():
-            try:
-                conn.execute(
-                    "INSERT INTO famille (code, libelle) VALUES (?, ?)",
-                    (nouvelle.strip().upper().replace(" ", "-"), nouvelle.strip()),
-                )
-                conn.commit()
-                st.success(f"Famille « {nouvelle} » créée.")
-                st.rerun()
-            except Exception as erreur:
-                commun.signaler(
-                    f"La famille « {nouvelle} » existe déjà ou n'a pas pu être créée.",
-                    erreur,
-                )
+    familles = conn.execute(
+        "SELECT id, libelle FROM famille ORDER BY libelle").fetchall()
+    noms_familles = {f["id"]: f["libelle"] for f in familles}
+
+    with st.expander("Créer une famille"):
+        with st.form("creer_famille"):
+            nouvelle = st.text_input("Libellé de la famille",
+                                     placeholder="Graines grillées apéro")
+            if st.form_submit_button("Créer la famille") and nouvelle.strip():
+                try:
+                    conn.execute(
+                        "INSERT INTO famille (code, libelle) VALUES (?, ?)",
+                        (nouvelle.strip().upper().replace(" ", "-")[:40],
+                         nouvelle.strip()))
+                    conn.commit()
+                except Exception as erreur:
+                    st.error(
+                        f"La famille « {nouvelle} » existe déjà ou n'a pas pu "
+                        "être créée.")
+                else:
+                    st.success(f"Famille « {nouvelle} » créée.")
+                    st.rerun()
+
+    # Les articles arrivent normalement par l'import, mais il faut pouvoir en
+    # déclarer un avant sa première production — pour lui donner sa cadence.
+    with st.expander("Créer un article"):
+        st.caption(
+            "Les articles apparaissent automatiquement au premier import. "
+            "Créez-en un ici seulement pour préparer son référentiel à l'avance."
+        )
+        with st.form("creer_article"):
+            colonnes = st.columns([1, 2, 2])
+            code_article = colonnes[0].text_input("Code", placeholder="CHICP01-100G")
+            libelle_article = colonnes[1].text_input(
+                "Libellé", placeholder="Chips vinaigre")
+            famille_article = colonnes[2].selectbox(
+                "Famille", [f["id"] for f in familles] or [None],
+                format_func=lambda i: noms_familles.get(i, "aucune famille"),
+                key="famille_nouvel_article")
+            if st.form_submit_button("Créer l'article"):
+                if not code_article.strip() or not libelle_article.strip():
+                    st.error("Le code et le libellé sont obligatoires.")
+                elif famille_article is None:
+                    st.error("Créez d'abord une famille.")
+                else:
+                    try:
+                        conn.execute(
+                            "INSERT INTO article (code, libelle) VALUES (?, ?)",
+                            (code_article.strip(), libelle_article.strip()))
+                        conn.commit()
+                        historisation.cloturer_et_inserer(
+                            conn, "article_famille",
+                            {"article_code": code_article.strip()},
+                            {"famille_id": famille_article}, date.today(),
+                            "Création depuis le référentiel", "utilisateur")
+                    except ErreurMetier as erreur:
+                        st.error(str(erreur))
+                    except Exception:
+                        st.error(
+                            f"L'article « {code_article} » existe déjà, ou son "
+                            "code est invalide.")
+                    else:
+                        st.success(
+                            f"Article « {code_article} » créé dans la famille "
+                            f"{noms_familles[famille_article]}. Pensez à lui "
+                            "donner une cadence dans l'onglet Cadences.")
+                        st.rerun()
 
     articles = [a[0] for a in conn.execute(
-        "SELECT code FROM article ORDER BY code"
-    ).fetchall()]
+        "SELECT code FROM article ORDER BY code").fetchall()]
     if articles and familles:
-        article = st.selectbox("Article", articles, key="famille_article")
-        modifie = referentiel_widget.bloc_referentiel(
-            conn,
-            titre=f"Famille de {article}",
-            table="article_famille",
-            cles={"article_code": article},
-            champs={"famille_id": {
-                "libelle": "Famille", "type": "choix",
-                "options": [f["id"] for f in familles],
-            }},
-            colonnes_frise={"famille_id": "Famille (identifiant)"},
-            cle_widget=f"famille_{article}",
-        )
-        if modifie:
-            st.rerun()
-        st.caption(
-            "Familles : "
-            + ", ".join(f"{f['id']} = {f['libelle']}" for f in familles)
-        )
+        st.divider()
+        article = commun.selecteur_article(
+            conn, cle="rattachement", libelle="Article à rattacher")
+        if article is not None:
+            modifie = referentiel_widget.bloc_referentiel(
+                conn,
+                titre=f"Famille de {article}",
+                table="article_famille",
+                cles={"article_code": article},
+                champs={"famille_id": {
+                    "libelle": "Famille", "type": "choix",
+                    "options": [f["id"] for f in familles],
+                    "libelles": noms_familles,
+                }},
+                colonnes_frise={"famille_id": "Famille"},
+                formats={"famille_id": noms_familles},
+                cle_widget=f"famille_{article}",
+            )
+            if modifie:
+                st.rerun()
     else:
-        st.info("Créez au moins une famille et importez des articles pour commencer.")
+        st.info(
+            "Créez au moins une famille et un article pour commencer, ou "
+            "importez une extraction : les articles y sont créés automatiquement."
+        )
+
 
 # ---------------------------------------------------------------- motifs
-
 with onglets[3]:
     st.caption(
         "La catégorie d'un motif pilote la cascade : un arrêt propre est retranché "

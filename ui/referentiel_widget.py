@@ -22,12 +22,16 @@ from ui import theme
 
 
 def frise_historique(
-    conn: sqlite3.Connection, table: str, cles: dict, colonnes: dict[str, str]
+    conn: sqlite3.Connection, table: str, cles: dict, colonnes: dict[str, str],
+    formats: dict[str, dict] | None = None,
 ) -> pd.DataFrame:
     """Toutes les périodes d'une clé, mises en forme pour la lecture.
 
     colonnes : {nom technique -> libellé affiché}.
+    formats  : {nom technique -> table de correspondance valeur -> libellé},
+               pour ne jamais montrer un identifiant technique à l'écran.
     """
+    formats = formats or {}
     lignes = historisation.historique(conn, table, cles)
     if not lignes:
         return pd.DataFrame()
@@ -41,7 +45,8 @@ def frise_historique(
             ),
         }
         for technique, libelle in colonnes.items():
-            entree[libelle] = ligne.get(technique)
+            brut = ligne.get(technique)
+            entree[libelle] = formats.get(technique, {}).get(brut, brut)
         affichage.append(entree)
     return pd.DataFrame(affichage)
 
@@ -72,11 +77,17 @@ def formulaire_changement(
             type_champ = description.get("type", "texte")
             valeur = description.get("valeur")
             if type_champ == "nombre":
-                # Un référentiel encore vide n'a aucune valeur en vigueur : la
-                # valeur proposée doit rester dans les bornes, sinon le formulaire
-                # refuse de s'afficher.
+                # Un référentiel encore vide n'a aucune valeur en vigueur. Plutôt
+                # que de retomber sur le minimum autorisé — qui n'a aucun sens
+                # métier — l'appelant peut proposer une valeur de départ.
                 minimum = float(description.get("minimum", 0.0))
-                defaut = float(valeur) if valeur is not None else minimum
+                suggestion = description.get("defaut")
+                if valeur is not None:
+                    defaut = float(valeur)
+                elif suggestion is not None:
+                    defaut = float(suggestion)
+                else:
+                    defaut = minimum
                 saisies[colonne] = st.number_input(
                     libelle, value=max(defaut, minimum), min_value=minimum,
                     step=description.get("pas", 1.0), format="%.2f",
@@ -92,7 +103,10 @@ def formulaire_changement(
             elif type_champ == "choix":
                 options = description.get("options", [])
                 index = options.index(valeur) if valeur in options else 0
-                saisies[colonne] = st.selectbox(libelle, options, index=index)
+                intitules = description.get("libelles") or {}
+                saisies[colonne] = st.selectbox(
+                    libelle, options, index=index,
+                    format_func=lambda v: str(intitules.get(v, v)))
             else:
                 saisies[colonne] = st.text_input(libelle, value=valeur or "")
 
@@ -134,6 +148,7 @@ def bloc_referentiel(
     cle_widget: str,
     rappel: str | None = None,
     avertissement: str | None = None,
+    formats: dict[str, dict] | None = None,
 ) -> bool:
     """Bloc complet : rappel de définition, valeur en vigueur, frise, formulaire."""
     st.subheader(titre)
@@ -142,15 +157,17 @@ def bloc_referentiel(
 
     en_vigueur = historisation.resoudre(conn, table, cles, date.today())
     if en_vigueur:
+        formats = formats or {}
         valeurs = " · ".join(
-            f"{libelle} : {en_vigueur.get(colonne)}"
+            f"{libelle} : "
+            f"{formats.get(colonne, {}).get(en_vigueur.get(colonne), en_vigueur.get(colonne))}"
             for colonne, libelle in colonnes_frise.items()
         )
         st.markdown(f"**En vigueur aujourd'hui** — {valeurs}")
     else:
         st.warning("Aucune valeur en vigueur à ce jour pour ce référentiel.")
 
-    frise = frise_historique(conn, table, cles, colonnes_frise)
+    frise = frise_historique(conn, table, cles, colonnes_frise, formats)
     if not frise.empty:
         with st.expander(f"Historique ({len(frise)} période(s))"):
             st.dataframe(frise, width="stretch", hide_index=True)
