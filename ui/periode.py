@@ -167,13 +167,29 @@ def selecteur(
 
         version = st.session_state._periode_version
         dates = st.columns([1, 1, 2])
+        # « Du » reste libre : le borner par « Au » empêcherait de déplacer la
+        # période vers le futur sans changer les deux champs dans le bon ordre.
         debut = dates[0].date_input(
             "Du", value=st.session_state._periode_debut,
             key=f"{cle}_debut_{version}", format="DD/MM/YYYY",
+            help="Premier jour pris en compte.",
         )
+        # « Au » ne peut pas précéder « Du » : le calendrier grise les dates
+        # impossibles, plutôt que de laisser saisir une période à l'envers puis
+        # de la refuser. Si le début vient de dépasser la fin, celle-ci suit.
+        # L'enregistrement précède le rerun, sans quoi la date tout juste
+        # saisie serait perdue au rendu suivant.
+        if debut:
+            st.session_state._periode_debut = debut
+        if debut and st.session_state._periode_fin < debut:
+            st.session_state._periode_fin = debut
+            st.session_state._periode_version += 1
+            st.rerun()
         fin = dates[1].date_input(
             "Au", value=st.session_state._periode_fin,
+            min_value=debut or st.session_state._periode_debut,
             key=f"{cle}_fin_{version}", format="DD/MM/YYYY",
+            help="Dernier jour pris en compte. Ne peut pas précéder la date de début.",
         )
         st.session_state._periode_debut = debut
         st.session_state._periode_fin = fin

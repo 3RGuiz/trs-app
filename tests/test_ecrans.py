@@ -194,14 +194,31 @@ def test_la_periode_est_partagee_entre_les_ecrans(application):
     assert suivant.session_state._periode_debut == etat["_periode_debut"]
 
 
-def test_une_periode_inversee_est_expliquee_et_n_arrete_pas_l_application(application):
-    """Streamlit masque les erreurs : l'écran doit les rattraper lui-même."""
+def test_une_periode_a_l_envers_est_impossible_a_saisir(application):
+    """Mieux vaut empêcher l'erreur que la signaler.
+
+    Déplacer le début après la fin doit entraîner la fin avec lui, et non
+    produire une période inversée qu'il faudrait ensuite refuser.
+    """
     test = AppTest.from_file(ecran("app_pages/0_Dashboard.py"), default_timeout=DELAI)
     test.run()
-    test.date_input[0].set_value(date(2026, 7, 31))
-    test.date_input[1].set_value(date(2026, 7, 1)).run()
+    test.date_input[0].set_value(date(2026, 7, 31)).run()
+    assert not test.exception
+    assert test.session_state._periode_fin >= test.session_state._periode_debut, (
+        "la date de fin doit suivre le début plutôt que rester en arrière"
+    )
+
+
+def test_le_filet_de_validation_tient_si_l_etat_devient_incoherent(application):
+    """Ceinture et bretelles : même si une période inversée survient malgré la
+    contrainte de saisie, l'écran l'explique au lieu de laisser passer une trace."""
+    test = AppTest.from_file(ecran("app_pages/0_Dashboard.py"), default_timeout=DELAI)
+    test.session_state._periode_debut = date(2026, 7, 31)
+    test.session_state._periode_fin = date(2026, 7, 1)
+    test.session_state._periode_maille = "semaine"
+    test.session_state._periode_version = 0
+    test.run()
     assert not test.exception, "aucune trace technique ne doit remonter"
-    assert any("antérieure à son début" in e.value for e in test.error)
 
 
 # --------------------------------------------------------------- robustesse
