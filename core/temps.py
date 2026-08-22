@@ -26,6 +26,7 @@ ETAT_FERME = "FERME"                          # To = 0 : fermeture prévue au ca
 ETAT_DONNEES_MANQUANTES = "DONNEES_MANQUANTES"  # Tr > 0 mais aucune ligne importée
 ETAT_HORS_SERVICE = "HORS_SERVICE"            # avant mise en service / après retrait de la ligne
 ETAT_HORS_HISTORIQUE = "HORS_HISTORIQUE"      # avant la date de début d'historique exploitable
+ETAT_SANS_CADENCE = "SANS_CADENCE"            # production réelle, aucune cadence applicable
 
 
 def mode_tr(conn: sqlite3.Connection, d: date | str) -> str:
@@ -194,6 +195,19 @@ def _cascade_du_jour(
         sans_cadence = du_jour["valeur_ppm"].isna()
         base["lignes_sans_cadence"] = int(sans_cadence.sum())
         valides = du_jour[~sans_cadence]
+
+        # Toute la production du jour est sans cadence applicable : le temps utile
+        # serait nul et le TRS afficherait 0 %, ce qui ressemblerait à une
+        # contre-performance alors que rien n'est mesurable. La journée est donc
+        # sortie des agrégations, avec un état qui dit ce qui manque (CDC §5.4).
+        if valides.empty:
+            base["etat"] = ETAT_SANS_CADENCE
+            base["Tt"] = 0.0
+            base["To"] = 0.0
+            base["Tr"] = 0.0
+            base["Tf"] = 0.0
+            return base
+
         # quantité / cadence -> minutes, directement (UVC / (UVC/minute)).
         base["Tu"] = float((valides["qte_produite"] / valides["valeur_ppm"]).sum())
         base["qte_produite"] = float(valides["qte_produite"].sum())

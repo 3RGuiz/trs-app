@@ -65,6 +65,47 @@ def test_production_sans_cadence_exclue_et_signalee(base):
     assert any("sans cadence" in alerte for alerte in resultat["alertes"])
 
 
+# Une production réelle sans aucune cadence applicable ne doit JAMAIS produire
+# un TRS de 0 % : ce serait une contre-performance apparente là où rien n'est
+# mesurable (CDC §5.4). Cas courant d'une ligne dont la cadence n'est pas encore
+# établie — ensachage manuel, conditionnement en vrac, travail à façon.
+def test_journee_sans_aucune_cadence_nest_pas_un_trs_de_zero(base):
+    base.execute("DELETE FROM cadence")
+    base.commit()
+    inserer_production(base, JOUR_JUILLET, produite=13_200)
+
+    df = temps.cascade_journaliere(base, 1, JOUR_JUILLET, JOUR_JUILLET)
+    assert df.iloc[0]["etat"] == temps.ETAT_SANS_CADENCE
+
+    resultat = indicateurs.indicateurs_periode(df)
+    assert resultat["TRS"] is None, "un TRS de 0 % serait un chiffre faux"
+    assert resultat["Tr"] == 0            # la journée n'entre pas dans les sommes
+    assert resultat["nb_jours_sans_cadence"] == 1
+    assert any("pas calculable" in a for a in resultat["alertes"])
+
+    # La production reste enregistrée : rien n'est perdu.
+    assert base.execute("SELECT COUNT(*) FROM production").fetchone()[0] == 1
+
+
+def test_journee_partiellement_sans_cadence_reste_mesurable(base):
+    # Si au moins un article a une cadence, la journée reste calculée sur lui,
+    # et les lignes sans cadence sont signalées sans fausser le résultat.
+    inserer_production(base, JOUR_JUILLET, article="ART-001", produite=13_200,
+                       of_numero="OF-1")
+    base.execute("DELETE FROM cadence WHERE article_code = 'ART-002'")
+    base.execute(
+        "INSERT INTO production (date, ligne_id, article_code, of_numero, qte_produite)"
+        " VALUES (?, 1, 'ART-002', 'OF-2', 5000)", (JOUR_JUILLET.isoformat(),)
+    )
+    base.commit()
+
+    df = temps.cascade_journaliere(base, 1, JOUR_JUILLET, JOUR_JUILLET)
+    assert df.iloc[0]["etat"] == temps.ETAT_OK
+    resultat = indicateurs.indicateurs_periode(df)
+    assert resultat["TRS"] == pytest.approx(13_200 / (30 * 570))
+    assert resultat["lignes_sans_cadence"] == 1
+
+
 def test_cadence_invalide_refusee(base):
     for valeur in (0, -5, None):
         with pytest.raises(ErreurMetier):

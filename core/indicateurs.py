@@ -47,6 +47,7 @@ def sommer_temps(df_cascade: pd.DataFrame) -> dict:
     temps["nb_jours_donnees_manquantes"] = int(
         (df_cascade["etat"] == "DONNEES_MANQUANTES").sum()
     )
+    temps["nb_jours_sans_cadence"] = int((df_cascade["etat"] == "SANS_CADENCE").sum())
     return temps
 
 
@@ -96,7 +97,14 @@ def _alertes(temps: dict, indicateurs: dict) -> list[str]:
             "La ligne a tenu plus que la capacité de référence : "
             "cadence à réévaluer. Ce n'est pas un défaut de mesure."
         )
-    if temps.get("lignes_sans_cadence"):
+    if temps.get("nb_jours_sans_cadence"):
+        alertes.append(
+            f"{temps['nb_jours_sans_cadence']} jour(s) de production sans aucune cadence "
+            "de référence : le TRS n'y est pas calculable et ces journées sont exclues "
+            "des indicateurs. Les quantités restent enregistrées. Pour les mesurer, "
+            "définissez une cadence de référence pour ces articles."
+        )
+    elif temps.get("lignes_sans_cadence"):
         alertes.append(
             f"{temps['lignes_sans_cadence']} ligne(s) de production sans cadence applicable, "
             "exclue(s) de tous les calculs de temps."
