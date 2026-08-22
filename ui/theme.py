@@ -31,6 +31,28 @@ LARGEUR_LOGO_MAX = "230px"
 MARGE_LOGO = "0.85rem 1rem"
 ARRONDI_LOGO = "0.9rem"
 
+
+def reglages_logo(racine: Path) -> dict[str, str]:
+    """Réglages d'affichage du logo, surchargeables depuis config.toml."""
+    valeurs = {
+        "logo_largeur": LARGEUR_LOGO,
+        "logo_largeur_max": LARGEUR_LOGO_MAX,
+        "logo_marge": MARGE_LOGO,
+        "logo_arrondi": ARRONDI_LOGO,
+    }
+    config = racine / "config.toml"
+    if config.exists():
+        try:
+            import tomllib
+            declares = tomllib.loads(config.read_text(encoding="utf-8")).get("identite", {})
+        except (tomllib.TOMLDecodeError, OSError):
+            declares = {}
+        for cle in valeurs:
+            if isinstance(declares.get(cle), str):
+                valeurs[cle] = declares[cle]
+    return valeurs
+
+
 # Noms de fichiers reconnus dans assets/, par ordre de pr\u00e9f\u00e9rence. Les visuels
 # de marque ne sont pas versionn\u00e9s : l'application se passe d'eux si absents.
 NOMS_LOGO = ("logo.png", "logo.svg", "logo.jpg", "logo.jpeg", "logo.webp")
@@ -102,6 +124,7 @@ def appliquer_identite(assets: Path) -> None:
     """
     import streamlit as st
 
+    reglages = reglages_logo(assets.parent)
     logo = chemin_logo(assets)
     if logo is not None:
         # Fond blanc derrière le logo, comme sur l'intranet : la charte le pose
@@ -112,24 +135,32 @@ def appliquer_identite(assets: Path) -> None:
         f"""
         <style>
           /* Le logo, posé sur une carte blanche centrée dans la bande jaune.
-             Streamlit impose une hauteur au logo : on la libère pour qu'il
-             occupe la largeur de la barre, en gardant ses proportions. */
-          [data-testid="stLogo"] {{
-              width: {LARGEUR_LOGO} !important;
-              max-width: {LARGEUR_LOGO_MAX} !important;
+             Streamlit fixe la hauteur de l'image ET celle de ses conteneurs :
+             sans libérer les deux, l'image reste écrêtée. Il la cale aussi à
+             gauche (object-position), d'où le recentrage explicite. */
+          [data-testid="stSidebarHeader"],
+          [data-testid="stLogoLink"],
+          [data-testid="stSidebar"] div:has(> [data-testid="stLogo"]),
+          [data-testid="stSidebar"] div:has(> [data-testid="stLogoLink"]) {{
               height: auto !important;
               max-height: none !important;
-              display: block;
-              margin: 0.4rem auto 0.9rem;
-              padding: {MARGE_LOGO};
-              background: #ffffff;
-              border-radius: {ARRONDI_LOGO};
-              box-sizing: border-box;
+              min-height: 0 !important;
+              display: block !important;
+              overflow: visible !important;
           }}
-          /* Le bloc d'en-tête laisse la place au logo agrandi. */
-          [data-testid="stSidebarHeader"] {{
+          [data-testid="stLogo"] {{
+              width: {reglages['logo_largeur']} !important;
+              max-width: {reglages['logo_largeur_max']} !important;
               height: auto !important;
-              padding-bottom: 0.2rem;
+              max-height: none !important;
+              object-fit: contain !important;
+              object-position: center !important;
+              display: block !important;
+              margin: 0.5rem auto 0.9rem !important;
+              padding: {reglages['logo_marge']} !important;
+              background: #ffffff !important;
+              border-radius: {reglages['logo_arrondi']} !important;
+              box-sizing: border-box !important;
           }}
 
           /* Chiffres alignés verticalement : indispensable pour comparer. */
