@@ -145,13 +145,15 @@ def appliquer_identite(assets: Path) -> None:
               display: flex !important;
               justify-content: center !important;
               align-items: center !important;
-              padding: 0.6rem 0.7rem 0.2rem !important;
+              /* Gouttière à droite : elle réserve la place du bouton de repli,
+                 qui sans elle se superpose au logo. */
+              padding: 0.6rem 2.2rem 0.2rem 0.6rem !important;
               margin-bottom: 0.4rem !important;
           }}
           [data-testid="stSidebarCollapseButton"] {{
               position: absolute !important;
-              top: 0.3rem;
-              right: 0.3rem;
+              top: 0.15rem;
+              right: 0.1rem;
               z-index: 5;
           }}
           /* Dans la barre latérale, le logo porte le testid stSidebarLogo —
