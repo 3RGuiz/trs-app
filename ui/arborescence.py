@@ -126,6 +126,50 @@ def afficher_arbre(
             )
 
 
+RETRAIT = " " * 6      # indentation d'un niveau, en espaces insécables
+
+
+def options_hierarchiques(
+    conn: sqlite3.Connection,
+    ligne_id: int,
+    jour: date | str | None = None,
+    inclure_retires: bool = False,
+) -> tuple[list[int], dict[int, str]]:
+    """Une seule liste, ordonnée et indentée, plutôt que deux menus enchaînés.
+
+    Retourne les identifiants dans l'ordre de l'arbre et leur libellé d'affichage :
+
+        ZONE : Friture
+              Friteuse conv
+              Friteuse batch
+        ZONE : Enrobage
+              Tunnel d'enrobage
+
+    La hiérarchie se lit d'un coup d'œil sans qu'il faille ouvrir une zone pour
+    savoir ce qu'elle contient.
+    """
+    zones, contenu, hors_zone = grouper_par_zone(conn, ligne_id, jour, inclure_retires)
+    ordre: list[int] = []
+    libelles: dict[int, str] = {}
+
+    def _suffixe(element: dict) -> str:
+        return f"  (retiré le {element['date_fin']})" if element["date_fin"] else ""
+
+    for zone in zones:
+        ordre.append(zone["id"])
+        libelles[zone["id"]] = f"ZONE : {zone['libelle']}{_suffixe(zone)}"
+        for element in contenu.get(zone["id"], []):
+            profondeur = max(1, element["chemin"].strip("/").count("/"))
+            ordre.append(element["id"])
+            libelles[element["id"]] = (
+                RETRAIT * profondeur + element["libelle"] + _suffixe(element)
+            )
+    for element in hors_zone:
+        ordre.append(element["id"])
+        libelles[element["id"]] = f"(hors zone) {element['libelle']}{_suffixe(element)}"
+    return ordre, libelles
+
+
 def selecteur_element(
     conn: sqlite3.Connection,
     ligne_id: int,
@@ -134,90 +178,91 @@ def selecteur_element(
     libelle: str = "Élément",
     autoriser_aucun: bool = True,
     autoriser_zone: bool = True,
+    aide: str | None = None,
 ) -> int | None:
-    """Choix d'un élément en deux temps : la zone, puis l'équipement.
-
-    Sur une ligne de quarante équipements, une liste unique impose de tout
-    parcourir. En deux étapes, on lit huit zones puis quatre ou cinq machines.
-    """
-    zones, contenu, hors_zone = grouper_par_zone(conn, ligne_id, jour)
-    if not zones and not hors_zone:
+    """Choix d'un élément dans une liste unique, hiérarchie visible."""
+    ordre, libelles = options_hierarchiques(conn, ligne_id, jour)
+    if not autoriser_zone:
+        zones = {
+            identifiant for identifiant, texte in libelles.items()
+            if texte.startswith("ZONE : ")
+        }
+        ordre = [identifiant for identifiant in ordre if identifiant not in zones]
+    if not ordre:
         st.caption("Aucun élément en service à cette date.")
         return None
 
-    colonnes = st.columns(2)
-    options_zones: list[int | None] = [z["id"] for z in zones]
-    if hors_zone:
-        options_zones.append(-1)          # groupe des éléments non rattachés
+    options: list[int | None] = list(ordre)
     if autoriser_aucun:
-        options_zones.insert(0, None)
+        options.insert(0, None)
+        libelles[None] = "Origine non renseignée"
 
-    def _nom_zone(identifiant):
-        if identifiant is None:
-            return "Origine non renseignée"
-        if identifiant == -1:
-            return f"Hors zone ({len(hors_zone)})"
-        zone = next(z for z in zones if z["id"] == identifiant)
-        return f"{zone['libelle']} ({len(contenu.get(identifiant, []))})"
-
-    zone_choisie = colonnes[0].selectbox(
-        f"{libelle} — zone", options_zones, format_func=_nom_zone, key=f"{cle}_zone",
+    return st.selectbox(
+        libelle, options, format_func=lambda i: libelles.get(i, str(i)),
+        key=f"{cle}_choix", help=aide,
     )
-    if zone_choisie is None:
-        return None
 
-    candidats = hors_zone if zone_choisie == -1 else contenu.get(zone_choisie, [])
-    options: list[int | None] = [e["id"] for e in candidats]
-    if autoriser_zone and zone_choisie != -1:
-        # Rattacher à la zone elle-même reste possible : tous les arrêts ne se
-        # rapportent pas à une machine précise.
-        options.insert(0, zone_choisie)
-    if not options:
-        colonnes[1].caption("Cette zone ne contient aucun équipement.")
-        return zone_choisie if autoriser_zone and zone_choisie != -1 else None
 
-    noms = {e["id"]: e["libelle"] for e in candidats}
-    if autoriser_zone and zone_choisie != -1:
-        noms[zone_choisie] = f"{_nom_zone(zone_choisie).split(' (')[0]} (la zone entière)"
+def destinations_possibles(
+    conn: sqlite3.Connection, ligne_id: int, element_id: int
+) -> tuple[list[int | None], dict[int | None, str]]:
+    """Où un élément peut être rattaché, selon ce qu'il est.
 
-    return colonnes[1].selectbox(
-        f"{libelle} — équipement", options,
-        format_func=lambda i: noms.get(i, str(i)), key=f"{cle}_equipement",
-    )
+    Un organe se rattache à un équipement, un équipement à une zone, une zone à
+    la racine. Proposer les zones comme destination d'un organe n'aurait pas de
+    sens, et proposer un équipement comme parent d'une zone non plus.
+    """
+    element = conn.execute(
+        "SELECT type, chemin FROM element_ligne WHERE id = ?", (element_id,)
+    ).fetchone()
+    if element is None:
+        return [], {}
+
+    ordre, libelles = options_hierarchiques(conn, ligne_id)
+    interdits = {element_id}
+    # Ni l'élément lui-même, ni l'un de ses descendants.
+    for candidat in conn.execute(
+        "SELECT id FROM element_ligne WHERE ligne_id = ? AND chemin LIKE ?",
+        (ligne_id, element["chemin"] + "%"),
+    ):
+        interdits.add(candidat[0])
+
+    types = {
+        identifiant[0]: identifiant[1] for identifiant in conn.execute(
+            "SELECT id, type FROM element_ligne WHERE ligne_id = ?", (ligne_id,))
+    }
+    attendu = {"ORGANE": "EQUIPEMENT", "EQUIPEMENT": "ZONE"}.get(element["type"])
+
+    if element["type"] == "ZONE":
+        # Une zone est un niveau racine : elle ne se range pas sous un
+        # équipement, et la ranger sous une autre zone ferait un quatrième
+        # niveau que l'arborescence n'a pas vocation à porter.
+        libelles[None] = "Racine — zone de premier niveau"
+        return [None], libelles
+
+    options: list[int | None] = [
+        identifiant for identifiant in ordre
+        if identifiant not in interdits and types.get(identifiant) == attendu
+    ]
+    return options, libelles
 
 
 def selecteur_parent(
     conn: sqlite3.Connection, ligne_id: int, cle: str = "parent",
     libelle: str = "Rattacher à",
 ) -> int | None:
-    """Choix du parent d'un nouvel élément : racine, une zone, ou un équipement.
+    """Choix du parent d'un nouvel élément, dans une liste unique et indentée.
 
-    La racine reste accessible pour créer une zone, mais elle n'est jamais le
-    choix par défaut : un équipement oublié à la racine disparaît des analyses
-    par zone.
+    La racine reste accessible pour créer une zone, mais n'est jamais le choix
+    par défaut : un équipement oublié à la racine disparaît des analyses par
+    zone.
     """
-    zones, contenu, _ = grouper_par_zone(conn, ligne_id)
-    options: list[int | None] = [None] + [z["id"] for z in zones]
-    noms = {z["id"]: z["libelle"] for z in zones}
-
-    colonnes = st.columns(2)
-    parent = colonnes[0].selectbox(
-        libelle, options,
-        format_func=lambda i: "Racine — créer une nouvelle zone" if i is None
-        else f"Zone {noms[i]}",
-        index=1 if zones else 0, key=f"{cle}_zone",
-    )
-    if parent is None:
-        return None
-
-    enfants = contenu.get(parent, [])
-    if not enfants:
-        return parent
-    sous_options: list[int | None] = [parent] + [e["id"] for e in enfants]
-    sous_noms = {e["id"]: e["libelle"] for e in enfants}
-    sous_noms[parent] = f"Directement dans {noms[parent]}"
-    return colonnes[1].selectbox(
-        "Niveau", sous_options, format_func=lambda i: sous_noms[i],
-        key=f"{cle}_sous_niveau",
-        help="Un organe se rattache à son équipement, un équipement à sa zone.",
+    ordre, libelles = options_hierarchiques(conn, ligne_id)
+    options: list[int | None] = [None] + list(ordre)
+    libelles[None] = "Racine — créer une nouvelle zone"
+    defaut = 1 if ordre else 0
+    return st.selectbox(
+        libelle, options, index=defaut,
+        format_func=lambda i: libelles.get(i, str(i)), key=f"{cle}_choix",
+        help="Un équipement se rattache à sa zone, un organe à son équipement.",
     )

@@ -133,32 +133,32 @@ with onglets[1]:
         st.rerun()
 
     st.divider()
-    st.markdown("**Journées exceptionnelles** — fériés, arrêt annuel, journées atypiques")
-    with st.form("exception_calendrier"):
-        colonnes = st.columns(4)
-        jour_exception = colonnes[0].date_input("Date", value=date.today())
-        to_exception = colonnes[1].number_input("To (minutes)", value=0,
-                                                min_value=0, max_value=1440)
-        tr_exception = colonnes[2].number_input("Tr (minutes)", value=0,
-                                                min_value=0, max_value=1440)
-        motif_exception = colonnes[3].text_input("Motif", placeholder="Férié")
-        if st.form_submit_button("Enregistrer la journée"):
-            if tr_exception > to_exception:
-                st.error(
-                    "Le temps requis ne peut pas dépasser le temps d'ouverture "
-                    f"({tr_exception} > {to_exception} minutes)."
-                )
-            else:
-                conn.execute(
-                    "INSERT INTO calendrier_exception (ligne_id, date, to_min, tr_min, motif)"
-                    " VALUES (?, ?, ?, ?, ?) ON CONFLICT(ligne_id, date) DO UPDATE SET"
-                    " to_min = excluded.to_min, tr_min = excluded.tr_min,"
-                    " motif = excluded.motif",
-                    (ligne["id"], jour_exception.isoformat(), int(to_exception),
-                     int(tr_exception), motif_exception.strip() or None),
-                )
-                conn.commit()
-                st.success(f"Journée du {jour_exception:%d/%m/%Y} enregistrée.")
+    with st.expander("Déclarer une journée exceptionnelle"):
+        with st.form("exception_calendrier"):
+            colonnes = st.columns(4)
+            jour_exception = colonnes[0].date_input("Date", value=date.today())
+            to_exception = colonnes[1].number_input("To (minutes)", value=0,
+                                                    min_value=0, max_value=1440)
+            tr_exception = colonnes[2].number_input("Tr (minutes)", value=0,
+                                                    min_value=0, max_value=1440)
+            motif_exception = colonnes[3].text_input("Motif", placeholder="Férié")
+            if st.form_submit_button("Enregistrer la journée"):
+                if tr_exception > to_exception:
+                    st.error(
+                        "Le temps requis ne peut pas dépasser le temps d'ouverture "
+                        f"({tr_exception} > {to_exception} minutes)."
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO calendrier_exception (ligne_id, date, to_min, tr_min, motif)"
+                        " VALUES (?, ?, ?, ?, ?) ON CONFLICT(ligne_id, date) DO UPDATE SET"
+                        " to_min = excluded.to_min, tr_min = excluded.tr_min,"
+                        " motif = excluded.motif",
+                        (ligne["id"], jour_exception.isoformat(), int(to_exception),
+                         int(tr_exception), motif_exception.strip() or None),
+                    )
+                    conn.commit()
+                    st.success(f"Journée du {jour_exception:%d/%m/%Y} enregistrée.")
 
     exceptions = pd.read_sql_query(
         "SELECT date AS Date, to_min AS 'To (min)', tr_min AS 'Tr (min)',"
@@ -237,84 +237,83 @@ with onglets[3]:
     st.dataframe(catalogue, width="stretch", hide_index=True)
 
     st.divider()
-    st.markdown("**Créer un motif**")
-    with st.form("creer_motif"):
-        colonnes = st.columns(3)
-        libelle_motif = colonnes[0].text_input("Libellé", placeholder="Bourrage")
-        categorie = colonnes[1].selectbox(
-            "Catégorie", ["ARRET_PROPRE", "HORS_REQUIS"],
-            format_func=lambda v: "Arrêt propre — aléa subi, retranché du temps requis"
-            if v == "ARRET_PROPRE"
-            else "Hors requis — retranché du temps d'ouverture",
-        )
-        famille_cause = colonnes[2].selectbox(
-            "Famille de cause (facultative)",
-            [None, "MECANIQUE", "ELECTRIQUE", "PROCESS", "MATIERE", "HUMAIN",
-             "ORGANISATION", "QUALITE"],
-            format_func=lambda v: "Non renseignée" if v is None else v.capitalize(),
-        )
-        arbre = elements.elements_en_service(conn, ligne["id"], date.today())
-        rattachement = st.selectbox(
-            "Rattacher à", [None] + [e["id"] for e in arbre],
-            format_func=lambda v: "Motif global (proposé partout)" if v is None
-            else next(e["libelle"] for e in arbre if e["id"] == v),
-        )
-        if st.form_submit_button("Créer le motif") and libelle_motif.strip():
-            proches = motifs.libelles_proches(conn, libelle_motif)
-            if proches:
-                st.warning(
-                    "Des motifs proches existent déjà : "
-                    + ", ".join(f"« {m['libelle']} »" for m in proches[:5])
-                    + ". Créer un doublon rendra le Pareto illisible. "
-                    "Renommez votre motif si l'un d'eux convient."
-                )
-            try:
-                motifs.creer_motif(
-                    conn,
-                    code=libelle_motif.strip().upper().replace(" ", "-")[:40],
-                    libelle=libelle_motif.strip(), categorie=categorie,
-                    date_debut=date.today(),
-                    commentaire="Création depuis le référentiel",
-                    auteur="utilisateur", famille=famille_cause,
-                    element_id=rattachement,
-                )
-            except ErreurMetier as erreur:
-                st.error(str(erreur))
-            else:
-                st.success(f"Motif « {libelle_motif} » créé.")
-                st.rerun()
+    with st.expander("Créer un motif"):
+        with st.form("creer_motif"):
+            colonnes = st.columns(3)
+            libelle_motif = colonnes[0].text_input("Libellé", placeholder="Bourrage")
+            categorie = colonnes[1].selectbox(
+                "Catégorie", ["ARRET_PROPRE", "HORS_REQUIS"],
+                format_func=lambda v: "Arrêt propre — aléa subi, retranché du temps requis"
+                if v == "ARRET_PROPRE"
+                else "Hors requis — retranché du temps d'ouverture",
+            )
+            famille_cause = colonnes[2].selectbox(
+                "Famille de cause (facultative)",
+                [None, "MECANIQUE", "ELECTRIQUE", "PROCESS", "MATIERE", "HUMAIN",
+                 "ORGANISATION", "QUALITE"],
+                format_func=lambda v: "Non renseignée" if v is None else v.capitalize(),
+            )
+            arbre = elements.elements_en_service(conn, ligne["id"], date.today())
+            rattachement = st.selectbox(
+                "Rattacher à", [None] + [e["id"] for e in arbre],
+                format_func=lambda v: "Motif global (proposé partout)" if v is None
+                else next(e["libelle"] for e in arbre if e["id"] == v),
+            )
+            if st.form_submit_button("Créer le motif") and libelle_motif.strip():
+                proches = motifs.libelles_proches(conn, libelle_motif)
+                if proches:
+                    st.warning(
+                        "Des motifs proches existent déjà : "
+                        + ", ".join(f"« {m['libelle']} »" for m in proches[:5])
+                        + ". Créer un doublon rendra le Pareto illisible. "
+                        "Renommez votre motif si l'un d'eux convient."
+                    )
+                try:
+                    motifs.creer_motif(
+                        conn,
+                        code=libelle_motif.strip().upper().replace(" ", "-")[:40],
+                        libelle=libelle_motif.strip(), categorie=categorie,
+                        date_debut=date.today(),
+                        commentaire="Création depuis le référentiel",
+                        auteur="utilisateur", famille=famille_cause,
+                        element_id=rattachement,
+                    )
+                except ErreurMetier as erreur:
+                    st.error(str(erreur))
+                else:
+                    st.success(f"Motif « {libelle_motif} » créé.")
+                    st.rerun()
 
     st.divider()
-    st.markdown("**Fusionner deux doublons**")
     tous = conn.execute("SELECT id, libelle FROM motif_arret ORDER BY libelle").fetchall()
     if len(tous) >= 2:
         with st.form("fusion_motifs"):
-            colonnes = st.columns(2)
-            garde = colonnes[0].selectbox(
-                "Motif à conserver", [m["id"] for m in tous],
-                format_func=lambda v: next(m["libelle"] for m in tous if m["id"] == v),
-            )
-            absorbe = colonnes[1].selectbox(
-                "Motif à absorber", [m["id"] for m in tous], index=1,
-                format_func=lambda v: next(m["libelle"] for m in tous if m["id"] == v),
-            )
-            justification = st.text_input("Motif de la fusion (obligatoire)")
-            if st.form_submit_button("Fusionner"):
-                if not justification.strip():
-                    st.error("La fusion doit être justifiée par un commentaire.")
-                else:
-                    try:
-                        nombre = motifs.fusionner_motifs(
-                            conn, garde, absorbe, justification, "utilisateur"
-                        )
-                    except ErreurMetier as erreur:
-                        st.error(str(erreur))
+                colonnes = st.columns(2)
+                garde = colonnes[0].selectbox(
+                    "Motif à conserver", [m["id"] for m in tous],
+                    format_func=lambda v: next(m["libelle"] for m in tous if m["id"] == v),
+                )
+                absorbe = colonnes[1].selectbox(
+                    "Motif à absorber", [m["id"] for m in tous], index=1,
+                    format_func=lambda v: next(m["libelle"] for m in tous if m["id"] == v),
+                )
+                justification = st.text_input("Motif de la fusion (obligatoire)")
+                if st.form_submit_button("Fusionner"):
+                    if not justification.strip():
+                        st.error("La fusion doit être justifiée par un commentaire.")
                     else:
-                        st.success(
-                            f"Fusion effectuée : {nombre} arrêt(s) réaffecté(s). "
-                            "Aucun indicateur de la cascade n'a bougé."
-                        )
-                        st.rerun()
+                        try:
+                            nombre = motifs.fusionner_motifs(
+                                conn, garde, absorbe, justification, "utilisateur"
+                            )
+                        except ErreurMetier as erreur:
+                            st.error(str(erreur))
+                        else:
+                            st.success(
+                                f"Fusion effectuée : {nombre} arrêt(s) réaffecté(s). "
+                                "Aucun indicateur de la cascade n'a bougé."
+                            )
+                            st.rerun()
 
 # ---------------------------------------------------------------- composition
 
@@ -333,147 +332,161 @@ with onglets[4]:
         if afficher_retires or e["date_fin"] is None
     ]
 
+    # Les gestes sont repliés : ils servent ponctuellement, alors que
+    # l'arborescence se consulte à chaque visite.
     st.divider()
-    st.markdown("**Ajouter un élément**")
-    # Le rattachement se choisit avant le reste : c'est l'oubli le plus coûteux,
-    # un équipement laissé à la racine disparaissant des analyses par zone.
-    parent = arborescence.selecteur_parent(conn, ligne["id"], cle="ajout")
-    with st.form("ajouter_element"):
-        colonnes = st.columns(3)
-        libelle_element = colonnes[0].text_input("Libellé", placeholder="Friteuse batch")
-        type_element = colonnes[1].selectbox(
-            "Type", elements.TYPES_VALIDES,
-            index=0 if parent is None else 1,
-            format_func=lambda v: arborescence.LIBELLES_TYPE.get(v, v))
-        depuis = colonnes[2].date_input("En service depuis", value=date.today(),
-                                        format="DD/MM/YYYY")
-        if st.form_submit_button("Ajouter") and libelle_element.strip():
-            try:
-                elements.ajouter_element(
-                    conn, ligne["id"], parent,
-                    code=libelle_element.strip().upper().replace(" ", "-")[:40],
-                    libelle=libelle_element.strip(), type_element=type_element,
-                    date_debut=depuis,
-                )
-            except ErreurMetier as erreur:
-                st.error(str(erreur))
-            else:
-                st.success(f"« {libelle_element} » ajouté.")
-                st.rerun()
+    with st.expander("Ajouter un élément"):
+        # Le rattachement se choisit avant le reste : c'est l'oubli le plus
+        # coûteux, un équipement laissé à la racine disparaissant des analyses
+        # par zone.
+        parent = arborescence.selecteur_parent(conn, ligne["id"], cle="ajout")
+        with st.form("ajouter_element"):
+                colonnes = st.columns(3)
+                libelle_element = colonnes[0].text_input(
+                    "Libellé", placeholder="Friteuse batch")
+                type_element = colonnes[1].selectbox(
+                    "Type", elements.TYPES_VALIDES,
+                    index=0 if parent is None else 1,
+                    format_func=lambda v: arborescence.LIBELLES_TYPE.get(v, v))
+                depuis = colonnes[2].date_input(
+                    "En service depuis", value=date.today(), format="DD/MM/YYYY")
+                if st.form_submit_button("Ajouter") and libelle_element.strip():
+                    try:
+                        elements.ajouter_element(
+                            conn, ligne["id"], parent,
+                            code=libelle_element.strip().upper().replace(" ", "-")[:40],
+                            libelle=libelle_element.strip(), type_element=type_element,
+                            date_debut=depuis,
+                        )
+                    except ErreurMetier as erreur:
+                        st.error(str(erreur))
+                    else:
+                        st.success(f"« {libelle_element} » ajouté.")
+                        st.rerun()
 
-    # Éléments retirés : sans ces deux gestes, un retrait par erreur est sans
-    # retour, et l'écran conseille un déplacement impossible.
+    en_service = [e for e in visibles if e["date_fin"] is None]
+    if en_service:
+        with st.expander("Déplacer un élément"):
+            st.caption(
+                "À utiliser quand un équipement est rattaché à la mauvaise zone : "
+                "son historique et ses arrêts sont conservés, aucun indicateur ne "
+                "bouge. C'est toujours préférable à le supprimer puis le recréer."
+            )
+            ordre, libelles_arbre = arborescence.options_hierarchiques(conn, ligne["id"])
+            colonnes = st.columns([2, 2, 1])
+            with colonnes[0]:
+                a_deplacer = st.selectbox(
+                    "Élément à déplacer", ordre,
+                    format_func=lambda v: libelles_arbre.get(v, str(v)),
+                    key="deplacer_quoi")
+            # La destination dépend du type : un organe se rattache à un
+            # équipement, un équipement à une zone, une zone à la racine.
+            cibles, libelles_cibles = arborescence.destinations_possibles(
+                conn, ligne["id"], a_deplacer)
+            type_deplace = next(
+                (e["type"] for e in visibles if e["id"] == a_deplacer), "EQUIPEMENT")
+            intitule = {"ORGANE": "Nouvel équipement", "EQUIPEMENT": "Nouvelle zone",
+                        "ZONE": "Nouveau rattachement"}.get(type_deplace, "Destination")
+            with colonnes[1]:
+                vers = st.selectbox(
+                    intitule, cibles or [None],
+                    format_func=lambda v: libelles_cibles.get(v, "aucune destination"),
+                    key="deplacer_ou")
+            colonnes[2].write("")
+            if colonnes[2].button("Déplacer"):
+                if not cibles:
+                    st.error(
+                        "Aucune destination possible : le niveau supérieur "
+                        "correspondant n'existe pas encore."
+                    )
+                else:
+                    try:
+                        elements.deplacer_element(conn, a_deplacer, vers)
+                    except ErreurMetier as erreur:
+                        st.error(str(erreur))
+                    else:
+                        st.success("Élément déplacé. Aucun indicateur n'a changé.")
+                        st.rerun()
+
+        with st.expander("Retirer un élément du service"):
+            st.caption(
+                "Le geste par défaut : l'élément disparaît des listes de saisie "
+                "mais reste attaché à ses arrêts passés."
+            )
+            with st.form("retirer_element"):
+                colonnes = st.columns(3)
+                a_retirer = colonnes[0].selectbox(
+                    "Élément", [e["id"] for e in en_service],
+                    format_func=lambda v: next(
+                        e["libelle"] for e in en_service if e["id"] == v))
+                date_retrait = colonnes[1].date_input(
+                    "Retiré le", value=date.today(), format="DD/MM/YYYY")
+                justification = colonnes[2].text_input("Motif du retrait")
+                if st.form_submit_button("Retirer du service"):
+                    try:
+                        elements.retirer_element(
+                            conn, a_retirer, date_retrait,
+                            justification.strip() or "Retrait du service", "utilisateur")
+                    except ErreurMetier as erreur:
+                        st.error(str(erreur))
+                    else:
+                        st.success(
+                            "Élément retiré. Les analyses passées sont inchangées "
+                            "et les arrêts lui restent attribués.")
+                        st.rerun()
+
+    # Sans ces deux gestes, un retrait par erreur est sans retour.
     retires = [dict(e) for e in conn.execute(
         "SELECT * FROM element_ligne WHERE ligne_id = ? AND date_fin IS NOT NULL"
         " ORDER BY date_fin DESC", (ligne["id"],)).fetchall()]
     if retires:
-        st.markdown("**Éléments retirés du service**")
-        st.caption(
-            "Un élément retiré n'est plus proposé à la saisie, mais reste "
-            "attaché à ses arrêts passés. Remettez-le en service si le retrait "
-            "était une erreur."
-        )
-        colonnes = st.columns([3, 1, 1])
-        choisi = colonnes[0].selectbox(
-            "Élément retiré", [e["id"] for e in retires],
-            format_func=lambda v: next(
-                f"{e['libelle']} — retiré le {e['date_fin']}"
-                for e in retires if e["id"] == v),
-            key="retire_choisi", label_visibility="collapsed")
-        element_retire = next(e for e in retires if e["id"] == choisi)
-        nb = elements.nb_arrets(conn, choisi)
-        enfants = elements.descendants(conn, choisi)
-
-        colonnes[1].write("")
-        if colonnes[1].button("Remettre en service", key="remettre"):
-            try:
-                elements.remettre_en_service(conn, choisi)
-            except ErreurMetier as erreur:
-                st.error(str(erreur))
-            else:
-                st.success(
-                    f"« {element_retire['libelle']} » est de nouveau en service. "
-                    "Vous pouvez maintenant le déplacer vers la bonne zone.")
-                st.rerun()
-
-        colonnes[2].write("")
-        supprimable = not nb and not enfants
-        if colonnes[2].button("Supprimer définitivement", key="supprimer",
-                              disabled=not supprimable,
-                              help="Possible uniquement sans arrêt rattaché ni "
-                                   "descendant." if not supprimable else None):
-            try:
-                elements.supprimer_element(conn, choisi)
-            except ErreurMetier as erreur:
-                st.error(str(erreur))
-            else:
-                st.success(f"« {element_retire['libelle']} » supprimé.")
-                st.rerun()
-        if not supprimable:
+        with st.expander(f"Éléments retirés du service ({len(retires)})"):
             st.caption(
-                f"« {element_retire['libelle']} » porte {nb} arrêt(s) et "
-                f"{len(enfants)} descendant(s) : il ne peut pas être supprimé, "
-                "seulement retiré ou remis en service."
+                "Un élément retiré n'est plus proposé à la saisie, mais reste "
+                "attaché à ses arrêts passés. Remettez-le en service si le "
+                "retrait était une erreur."
             )
-        st.divider()
-
-    st.markdown("**Déplacer un élément**")
-    st.caption(
-        "À utiliser quand un équipement est rattaché à la mauvaise zone : son "
-        "historique et ses arrêts sont conservés, aucun indicateur ne bouge. "
-        "C'est toujours préférable à le supprimer puis le recréer."
-    )
-    en_service = [e for e in visibles if e["date_fin"] is None]
-    if en_service:
-        colonnes = st.columns([2, 2, 1])
-        a_deplacer = colonnes[0].selectbox(
-            "Élément à déplacer", [e["id"] for e in en_service],
-            format_func=lambda v: next(e["libelle"] for e in en_service if e["id"] == v),
-            key="deplacer_quoi")
-        zones_cibles = [e for e in en_service if e["parent_id"] is None]
-        vers = colonnes[1].selectbox(
-            "Nouvelle zone", [e["id"] for e in zones_cibles] or [None],
-            format_func=lambda v: next(
-                (e["libelle"] for e in zones_cibles if e["id"] == v), "aucune zone"),
-            key="deplacer_ou")
-        colonnes[2].write("")
-        if colonnes[2].button("Déplacer") and vers is not None:
-            try:
-                elements.deplacer_element(conn, a_deplacer, vers)
-            except ErreurMetier as erreur:
-                st.error(str(erreur))
-            else:
-                st.success("Élément déplacé. Aucun indicateur n'a changé.")
-                st.rerun()
-
-    if visibles:
-        st.markdown("**Retirer un élément du service**")
-        with st.form("retirer_element"):
-            colonnes = st.columns(3)
-            en_service = [e for e in visibles if e["date_fin"] is None]
-            a_retirer = colonnes[0].selectbox(
-                "Élément", [e["id"] for e in en_service],
+            colonnes = st.columns([3, 1, 1])
+            choisi = colonnes[0].selectbox(
+                "Élément retiré", [e["id"] for e in retires],
                 format_func=lambda v: next(
-                    e["libelle"] for e in en_service if e["id"] == v),
-            ) if en_service else None
-            date_retrait = colonnes[1].date_input("Retiré le", value=date.today())
-            justification = colonnes[2].text_input("Motif du retrait")
-            if st.form_submit_button("Retirer du service") and a_retirer:
+                    f"{e['libelle']} — retiré le {e['date_fin']}"
+                    for e in retires if e["id"] == v),
+                key="retire_choisi", label_visibility="collapsed")
+            element_retire = next(e for e in retires if e["id"] == choisi)
+            nb = elements.nb_arrets(conn, choisi)
+            enfants = elements.descendants(conn, choisi)
+
+            colonnes[1].write("")
+            if colonnes[1].button("Remettre en service", key="remettre"):
                 try:
-                    elements.retirer_element(
-                        conn, a_retirer, date_retrait,
-                        justification.strip() or "Retrait du service", "utilisateur",
-                    )
+                    elements.remettre_en_service(conn, choisi)
                 except ErreurMetier as erreur:
                     st.error(str(erreur))
                 else:
                     st.success(
-                        "Élément retiré. Les analyses passées sont inchangées et "
-                        "les arrêts lui restent attribués."
-                    )
+                        f"« {element_retire['libelle']} » est de nouveau en "
+                        "service. Vous pouvez maintenant le déplacer.")
                     st.rerun()
 
-# ---------------------------------------------------------------- paramètres datés
+            colonnes[2].write("")
+            supprimable = not nb and not enfants
+            if colonnes[2].button("Supprimer définitivement", key="supprimer",
+                                  disabled=not supprimable):
+                try:
+                    elements.supprimer_element(conn, choisi)
+                except ErreurMetier as erreur:
+                    st.error(str(erreur))
+                else:
+                    st.success(f"« {element_retire['libelle']} » supprimé.")
+                    st.rerun()
+            if not supprimable:
+                st.caption(
+                    f"« {element_retire['libelle']} » porte {nb} arrêt(s) et "
+                    f"{len(enfants)} descendant(s) : il ne peut pas être "
+                    "supprimé, seulement remis en service."
+                )
+
 
 with onglets[5]:
     st.caption(
