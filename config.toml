@@ -1,3 +1,10 @@
 # Paramètres non sensibles de l'application. Le chemin est relatif à ce dossier.
 [base]
 chemin = "data/trs.db"
+
+[identite]
+# Emplacement du logo affiché dans l'application. Chemin relatif au dossier de
+# l'application, ou absolu — il peut pointer vers un dossier SharePoint
+# synchronisé, ce qui évite d'avoir à recopier le fichier à chaque mise à jour
+# de la charte. Le logo n'est jamais versionné (CLAUDE.md, règle 9).
+logo = "assets/logo.png"

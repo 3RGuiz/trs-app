@@ -17,9 +17,11 @@ ESPACE_INSECABLE = "\u00a0"
 # les s\u00e9ries de graphiques gardent la palette fonctionnelle plus bas, valid\u00e9e
 # pour rester lisible en vision d\u00e9ficiente des couleurs (CDC \u00a77.0).
 ACCENT_PRIMAIRE = "#0069b4"      # bleu
-ACCENT_CHAUD = "#ffc800"         # jaune
+ACCENT_CHAUD = "#f2c230"         # jaune de l'interface
+ACCENT_CHAUD_VIF = "#ffc800"     # jaune du logo, réservé aux aplats
 ACCENT_VIF = "#e30613"           # rouge
 ANTHRACITE = "#2b2a28"
+BORDURE_CHAUDE = "#dcae22"   # jaune assombri, pour border sur fond jaune
 
 # Noms de fichiers reconnus dans assets/, par ordre de pr\u00e9f\u00e9rence. Les visuels
 # de marque ne sont pas versionn\u00e9s : l'application se passe d'eux si absents.
@@ -45,7 +47,30 @@ COULEUR_CRITIQUE = ACCENT_VIF
 
 
 def chemin_logo(assets: Path) -> Path | None:
-    """Logo \u00e0 afficher dans la barre lat\u00e9rale, ou None s'il n'a pas \u00e9t\u00e9 d\u00e9pos\u00e9."""
+    """Logo \u00e0 afficher, ou None s'il n'a pas \u00e9t\u00e9 d\u00e9pos\u00e9.
+
+    Cherche d'abord le chemin d\u00e9clar\u00e9 dans config.toml \u2014 il peut \u00eatre absolu et
+    pointer vers un dossier SharePoint synchronis\u00e9, de sorte qu'une mise \u00e0 jour
+    de la charte se propage sans toucher \u00e0 l'application. \u00c0 d\u00e9faut, prend le
+    premier fichier reconnu dans assets/.
+    """
+    racine = assets.parent
+    config = racine / "config.toml"
+    if config.exists():
+        try:
+            import tomllib
+            declare = tomllib.loads(config.read_text(encoding="utf-8")).get(
+                "identite", {}
+            ).get("logo")
+        except (tomllib.TOMLDecodeError, OSError):
+            declare = None
+        if declare:
+            candidat = Path(declare)
+            if not candidat.is_absolute():
+                candidat = racine / candidat
+            if candidat.exists():
+                return candidat
+
     for nom in NOMS_LOGO:
         candidat = assets / nom
         if candidat.exists():
@@ -71,30 +96,50 @@ def appliquer_identite(assets: Path) -> None:
 
     logo = chemin_logo(assets)
     if logo is not None:
+        # Fond blanc derrière le logo, comme sur l'intranet : la charte le pose
+        # sur du blanc, jamais directement sur le jaune.
         st.logo(str(logo), size="large")
 
-    # Retouches minimales : une barre d'accent sous les titres de section, et
-    # des chiffres tabulaires pour que les colonnes s'alignent verticalement.
     st.html(
         f"""
         <style>
+          /* Le logo se détache sur blanc, y compris dans la barre jaune. */
+          [data-testid="stSidebarHeader"], [data-testid="stLogo"] {{
+              background: #ffffff;
+              border-radius: 0.5rem;
+          }}
+          [data-testid="stLogo"] {{ padding: 0.35rem 0.6rem; }}
+
+          /* Chiffres alignés verticalement : indispensable pour comparer. */
           [data-testid="stMetricValue"] {{
               font-variant-numeric: tabular-nums;
               color: {ANTHRACITE};
           }}
           [data-testid="stMetricLabel"] {{ color: #52514e; }}
+          table, [data-testid="stDataFrame"] {{ font-variant-numeric: tabular-nums; }}
+
+          /* Titres de section soulignés du jaune de la charte. */
           h2 {{
               border-bottom: 3px solid {ACCENT_CHAUD};
               padding-bottom: 0.2rem;
               display: inline-block;
           }}
+
+          /* Sur fond jaune, l'encre reste noire — jamais de blanc sur jaune. */
+          [data-testid="stSidebar"] button {{ color: {ANTHRACITE}; }}
           [data-testid="stSidebarNav"] a[aria-current="page"] {{
-              border-left: 3px solid {ACCENT_PRIMAIRE};
+              background: rgba(255, 255, 255, 0.55);
+              border-radius: 0.35rem;
+              font-weight: 600;
           }}
-          table, [data-testid="stDataFrame"] {{ font-variant-numeric: tabular-nums; }}
+          .stButton button[kind="primary"] {{
+              color: {ANTHRACITE};
+              border: 1px solid {BORDURE_CHAUDE};
+          }}
         </style>
         """
     )
+
 
 def format_nombre(valeur: float | None, decimales: int = 0) -> str:
     """13500 -> « 13 500 » (espace insécable, virgule décimale)."""
