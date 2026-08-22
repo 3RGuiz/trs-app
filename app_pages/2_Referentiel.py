@@ -76,20 +76,16 @@ with onglets[0]:
         "SELECT DISTINCT article_code FROM production WHERE ligne_id = ?"
         " UNION SELECT DISTINCT article_code FROM cadence WHERE ligne_id = ?"
         " ORDER BY 1", (ligne["id"], ligne["id"])).fetchall()]
-    tout_le_catalogue = st.checkbox(
-        "Afficher tous les articles du catalogue",
-        help="Par défaut, seuls les articles produits sur cette ligne sont "
-             "proposés. Cochez pour déclarer une cadence avant la première "
-             "production.")
-
-    article = commun.selecteur_article(
-        conn, ligne["id"], cle="cadence", tous_les_articles=tout_le_catalogue)
-    if article is None:
+    if not articles_ligne:
         st.info(
-            "Aucun article n'est encore produit sur cette ligne. Les articles "
-            "apparaissent au premier import ; cochez la case ci-dessus pour "
-            "déclarer une cadence à l'avance."
+            "Aucun article n'est encore produit sur cette ligne. Le catalogue "
+            "entier est donc proposé, pour déclarer une cadence avant la "
+            "première production."
         )
+    article = commun.selecteur_article(
+        conn, ligne["id"], cle="cadence", tous_les_articles=not articles_ligne)
+    if article is None:
+        st.info("Aucun article au catalogue : importez une extraction pour commencer.")
     else:
 
         # Les articles d'une même ligne partagent le plus souvent la même

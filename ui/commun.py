@@ -228,13 +228,19 @@ def selecteur_article(
     }
     familles = sorted({f for f in rattachements.values() if f})
 
-    colonnes = st.columns(2)
-    famille = colonnes[0].selectbox(
-        "Famille", [None] + familles,
-        format_func=lambda f: "Toutes les familles" if f is None else f,
-        key=f"{cle}_famille",
-        help="Restreint la liste des articles à cette famille.",
-    )
+    # Un filtre à une seule valeur n'aide personne : il n'apparaît qu'à partir
+    # de deux familles à départager.
+    if len(familles) > 1:
+        colonnes = st.columns(2)
+        famille = colonnes[0].selectbox(
+            "Famille", [None] + familles,
+            format_func=lambda f: "Toutes les familles" if f is None else f,
+            key=f"{cle}_famille",
+            help="Restreint la liste des articles à cette famille.",
+        )
+    else:
+        colonnes = [st.container(), st.container()]
+        famille = None
     retenus = [a for a in candidats
                if famille is None or rattachements.get(a) == famille]
     if not retenus:
