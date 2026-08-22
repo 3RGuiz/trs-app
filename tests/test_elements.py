@@ -6,7 +6,8 @@ import pytest
 
 from core import arrets, elements, indicateurs, temps
 from core.erreurs import ErreurMetier, SuppressionInterdite
-from tests.conftest import JOUR_JUILLET, inserer_arret, inserer_production
+from tests.conftest import (AUTEUR, JOUR_JUILLET, inserer_arret,
+                            inserer_production)
 
 
 def _indicateurs_du_jour(conn):
@@ -131,3 +132,36 @@ def test_deplacement_recalcule_les_chemins(base, arbre):
 def test_deplacement_sous_un_descendant_refuse(base, arbre):
     with pytest.raises(ErreurMetier):
         elements.deplacer_element(base, arbre["zone1"], arbre["machine1"])
+
+
+# Un retrait par erreur doit pouvoir être annulé : sans cela, un équipement
+# retiré à tort est définitivement invisible, et le conseil « déplacez-le »
+# devient inapplicable puisqu'il n'apparaît plus dans les listes de saisie.
+def test_remise_en_service_apres_retrait(base, arbre):
+    inserer_production(base, JOUR_JUILLET)
+    inserer_arret(base, JOUR_JUILLET, "PANNE", element_id=arbre["machine1"],
+                  debut="2026-07-15 08:00", fin="2026-07-15 09:10")
+    avant = _indicateurs_du_jour(base)
+
+    elements.retirer_element(base, arbre["machine1"], "2026-08-01")
+    assert "MACH-1" not in [
+        e["code"] for e in elements.elements_en_service(base, 1, "2026-08-15")
+    ]
+
+    elements.remettre_en_service(base, arbre["machine1"], "Retrait par erreur", AUTEUR)
+    assert "MACH-1" in [
+        e["code"] for e in elements.elements_en_service(base, 1, "2026-08-15")
+    ]
+    # Les arrêts et les indicateurs sont intacts.
+    assert _indicateurs_du_jour(base) == avant
+    assert elements.nb_arrets(base, arbre["machine1"]) == 1
+    # L'opération est tracée.
+    assert base.execute(
+        "SELECT COUNT(*) FROM journal_referentiel WHERE table_cible = 'element_ligne'"
+        " AND action = 'CORRECTION'"
+    ).fetchone()[0] >= 1
+
+
+def test_remise_en_service_dun_element_deja_actif_refusee(base, arbre):
+    with pytest.raises(ErreurMetier):
+        elements.remettre_en_service(base, arbre["machine2"])

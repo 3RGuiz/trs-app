@@ -85,16 +85,30 @@ def ajouter_element(
         (ligne_id, code, iso(date_debut)),
     ).fetchone()
     if existant is not None:
-        etat = (f"retiré du service le {existant['date_fin']}"
-                if existant["date_fin"] else "toujours en service")
+        # Le geste à recommander dépend de l'état de l'élément existant :
+        # conseiller « Déplacer » pour un élément retiré serait inapplicable,
+        # puisqu'il n'apparaît plus dans les listes de la saisie.
+        if existant["date_fin"]:
+            geste = (
+                f"Cet élément a été retiré du service le {existant['date_fin']}. "
+                "Utilisez « Remettre en service » ci-dessous pour annuler ce "
+                "retrait, puis « Déplacer » pour le rattacher à la bonne zone. "
+                "S'il n'a jamais servi et que vous voulez repartir de zéro, "
+                "« Supprimer définitivement » est proposé tant qu'aucun arrêt "
+                "ne lui est rattaché."
+            )
+        else:
+            geste = (
+                "S'il s'agit du même équipement mal rattaché, utilisez "
+                "« Déplacer » pour le rattacher à la bonne zone : son historique "
+                "et ses arrêts sont conservés."
+            )
         raise ErreurMetier(
             f"Un élément « {existant['libelle']} » portant le code {code} existe "
-            f"déjà avec cette date de mise en service ({iso(date_debut)}), "
-            f"{etat}.\n\n"
-            "S'il s'agit du même équipement mal rattaché, utilisez « Déplacer » "
-            "pour le rattacher à la bonne zone : son historique et ses arrêts "
-            "sont conservés. S'il s'agit d'un équipement réellement différent, "
-            "donnez-lui un autre code ou une autre date de mise en service."
+            f"déjà avec cette date de mise en service ({iso(date_debut)}).\n\n"
+            f"{geste}\n\n"
+            "S'il s'agit d'un équipement réellement différent, donnez-lui un "
+            "autre libellé ou une autre date de mise en service."
         )
 
     with transaction(conn):
@@ -168,6 +182,35 @@ def retirer_element(
             conn, "CLOTURE", element["code"],
             {"libelle": element["libelle"]}, {"date_fin": iso(date_fin)},
             iso(date_fin), commentaire, auteur,
+        )
+
+
+def remettre_en_service(
+    conn: sqlite3.Connection,
+    element_id: int,
+    commentaire: str = "Retrait annulé",
+    auteur: str = "utilisateur",
+) -> None:
+    """Annule un retrait : l'élément redevient disponible à la saisie.
+
+    Ce n'est pas une réécriture du passé mais la correction d'un geste : on
+    retire parfois un équipement par erreur, ou pour le recréer ailleurs avant
+    de découvrir qu'il fallait le déplacer. L'opération est tracée au journal,
+    et les arrêts déjà rattachés restent intacts.
+    """
+    element = _element(conn, element_id)
+    if element["date_fin"] is None:
+        raise ErreurMetier(
+            f"« {element['libelle']} » est déjà en service : il n'y a rien à annuler."
+        )
+    with transaction(conn):
+        conn.execute(
+            "UPDATE element_ligne SET date_fin = NULL WHERE id = ?", (element_id,)
+        )
+        _journaliser(
+            conn, "CORRECTION", element["code"],
+            {"date_fin": element["date_fin"]}, {"date_fin": None},
+            date.today().isoformat(), commentaire, auteur,
         )
 
 

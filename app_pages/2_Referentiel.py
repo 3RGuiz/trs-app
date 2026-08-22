@@ -361,6 +361,62 @@ with onglets[4]:
                 st.success(f"« {libelle_element} » ajouté.")
                 st.rerun()
 
+    # Éléments retirés : sans ces deux gestes, un retrait par erreur est sans
+    # retour, et l'écran conseille un déplacement impossible.
+    retires = [dict(e) for e in conn.execute(
+        "SELECT * FROM element_ligne WHERE ligne_id = ? AND date_fin IS NOT NULL"
+        " ORDER BY date_fin DESC", (ligne["id"],)).fetchall()]
+    if retires:
+        st.markdown("**Éléments retirés du service**")
+        st.caption(
+            "Un élément retiré n'est plus proposé à la saisie, mais reste "
+            "attaché à ses arrêts passés. Remettez-le en service si le retrait "
+            "était une erreur."
+        )
+        colonnes = st.columns([3, 1, 1])
+        choisi = colonnes[0].selectbox(
+            "Élément retiré", [e["id"] for e in retires],
+            format_func=lambda v: next(
+                f"{e['libelle']} — retiré le {e['date_fin']}"
+                for e in retires if e["id"] == v),
+            key="retire_choisi", label_visibility="collapsed")
+        element_retire = next(e for e in retires if e["id"] == choisi)
+        nb = elements.nb_arrets(conn, choisi)
+        enfants = elements.descendants(conn, choisi)
+
+        colonnes[1].write("")
+        if colonnes[1].button("Remettre en service", key="remettre"):
+            try:
+                elements.remettre_en_service(conn, choisi)
+            except ErreurMetier as erreur:
+                st.error(str(erreur))
+            else:
+                st.success(
+                    f"« {element_retire['libelle']} » est de nouveau en service. "
+                    "Vous pouvez maintenant le déplacer vers la bonne zone.")
+                st.rerun()
+
+        colonnes[2].write("")
+        supprimable = not nb and not enfants
+        if colonnes[2].button("Supprimer définitivement", key="supprimer",
+                              disabled=not supprimable,
+                              help="Possible uniquement sans arrêt rattaché ni "
+                                   "descendant." if not supprimable else None):
+            try:
+                elements.supprimer_element(conn, choisi)
+            except ErreurMetier as erreur:
+                st.error(str(erreur))
+            else:
+                st.success(f"« {element_retire['libelle']} » supprimé.")
+                st.rerun()
+        if not supprimable:
+            st.caption(
+                f"« {element_retire['libelle']} » porte {nb} arrêt(s) et "
+                f"{len(enfants)} descendant(s) : il ne peut pas être supprimé, "
+                "seulement retiré ou remis en service."
+            )
+        st.divider()
+
     st.markdown("**Déplacer un élément**")
     st.caption(
         "À utiliser quand un équipement est rattaché à la mauvaise zone : son "
