@@ -8,6 +8,7 @@ expliquer en français. Le détail technique part en console, jamais à l'écran
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 import tomllib
 from datetime import date
@@ -35,7 +36,16 @@ def signaler(message: str, erreur: Exception | None = None) -> None:
 
 
 def chemin_base() -> Path:
-    """Chemin de la base, lu dans config.toml — jamais écrit en dur."""
+    """Chemin de la base, lu dans config.toml — jamais écrit en dur.
+
+    La variable d'environnement TRS_BASE prend le dessus : elle permet aux
+    tests d'écran de travailler sur un jeu maîtrisé, et sur le poste
+    d'exploitation d'ouvrir ponctuellement une sauvegarde sans toucher à la
+    configuration.
+    """
+    surcharge = os.environ.get("TRS_BASE")
+    if surcharge:
+        return Path(surcharge)
     config = RACINE / "config.toml"
     if config.exists():
         contenu = tomllib.loads(config.read_text(encoding="utf-8"))
