@@ -41,3 +41,9 @@ tests/test_local_*.py
 *_entreprise.py
 *_reel.py
 referentiel_local*
+
+# ---- Éléments de marque : hors dépôt (regle 9) ----
+# Le logo et les visuels de l'entreprise ne sont pas versionnés. L'application
+# les charge s'ils sont présents, et fonctionne sans.
+assets/*
+!assets/.gitkeep

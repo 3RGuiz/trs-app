@@ -162,7 +162,9 @@ Trois règles d'import à ne pas contourner :
 ```
 core/    Python pur — AUCUN import de streamlit. C'est la règle qui rend le projet testable.
 ui/      Composants d'affichage réutilisables (thème, widget référentiel, graphiques).
-pages/   Pages Streamlit : affichage et saisie uniquement, zéro logique de calcul.
+app_pages/ Pages Streamlit : affichage et saisie uniquement, zéro logique de calcul.
+         Le menu est déclaré dans app.py (st.navigation), qui ne fait qu'aiguiller.
+assets/  Logo et visuels de l'entreprise — non versionnés (règle 9).
 tests/   pytest. Les invariants du CDC §5.5 sont bloquants.
 ```
 

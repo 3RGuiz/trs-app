@@ -29,7 +29,6 @@ LIBELLES_CHAMPS = {
     "qte_ensachee": "Compteur sortie ensacheuse",
 }
 
-st.set_page_config(page_title="Import", layout="wide")
 st.title("Importer une extraction ERP")
 
 conn = commun.ouvrir()

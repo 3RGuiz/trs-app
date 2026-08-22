@@ -16,7 +16,6 @@ from core import arrets, elements, motifs, temps
 from core.erreurs import ErreurMetier
 from ui import commun, theme
 
-st.set_page_config(page_title="Arrêts", layout="wide")
 st.title("Saisie des arrêts")
 
 conn = commun.ouvrir()

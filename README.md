@@ -45,7 +45,8 @@ Aucune donnée métier n'est livrée avec le code.
 ```
 core/     Python pur, sans dépendance à Streamlit — testable isolément
 ui/       Composants d'affichage réutilisables
-pages/    Écrans Streamlit : affichage et saisie uniquement
+app_pages/ Écrans Streamlit : affichage et saisie uniquement
+assets/   Logo et visuels, non versionnés
 tests/    pytest
 data/     Base SQLite et fichiers de travail (non versionnés)
 ```

@@ -16,7 +16,6 @@ from core import cadences, elements, historisation, motifs
 from core.erreurs import ErreurMetier
 from ui import commun, referentiel_widget, theme
 
-st.set_page_config(page_title="Référentiel", layout="wide")
 st.title("Référentiel")
 
 conn = commun.ouvrir()

@@ -16,7 +16,6 @@ from core import agregation
 from core.erreurs import ErreurMetier
 from ui import commun, periode as periode_ui, theme
 
-st.set_page_config(page_title="Rendement", layout="wide")
 
 conn = commun.ouvrir()
 lignes = commun.lignes_disponibles(conn)

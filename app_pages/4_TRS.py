@@ -13,7 +13,6 @@ from core import agregation, arrets, cadences, indicateurs, temps
 from core.erreurs import ErreurMetier
 from ui import cartes, commun, graphiques, periode as periode_ui, theme
 
-st.set_page_config(page_title="TRS", layout="wide")
 
 conn = commun.ouvrir()
 lignes = commun.lignes_disponibles(conn)

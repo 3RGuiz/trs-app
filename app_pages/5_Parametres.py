@@ -18,7 +18,6 @@ from core import sauvegarde
 from core.erreurs import SauvegardeEchouee
 from ui import commun, theme
 
-st.set_page_config(page_title="Paramètres", layout="wide")
 st.title("Paramètres")
 
 conn = commun.ouvrir()

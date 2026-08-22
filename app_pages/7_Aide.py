@@ -14,7 +14,6 @@ import streamlit as st
 
 from ui import commun
 
-st.set_page_config(page_title="Aide", layout="wide")
 st.title("Comprendre les indicateurs")
 
 NOTICE = commun.RACINE / "docs" / "Notice_utilisateur.md"
