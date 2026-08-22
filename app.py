@@ -36,12 +36,18 @@ if commun.production_absente(conn, ligne["id"]):
 
 periode = periode_ui.selecteur(conn, ligne["id"])
 commun.valider_periode(periode.debut, periode.fin)
+article, famille, perimetre = commun.selecteur_produit(conn, ligne["id"])
 
 try:
     cascade = temps.cascade_journaliere(conn, ligne["id"], periode.debut, periode.fin)
     resultat = indicateurs.indicateurs_periode(cascade)
     par_maille = agregation.agreger_par_periode(cascade, periode.maille)
     changements = cadences.dates_changement(conn, ligne["id"], periode.debut, periode.fin)
+    if article or famille:
+        evolution = agregation.evolution_produit(
+            conn, ligne["id"], periode.debut, periode.fin, periode.maille,
+            article_code=article, famille_libelle=famille,
+        )
 except ErreurMetier as erreur:
     commun.signaler(str(erreur), erreur)
 except Exception as erreur:
@@ -50,9 +56,59 @@ except Exception as erreur:
         "calendrier depuis la page Référentiel, puis réessayez.", erreur,
     )
 
+unite = commun.unite_ligne(ligne)
+
+# ---------------------------------------------------------------- focus produit
+
+if article or famille:
+    if evolution.empty:
+        st.info(
+            f"Aucune production exploitable pour {perimetre} sur cette période. "
+            "Élargissez l'intervalle, ou vérifiez que ce produit dispose d'une "
+            "cadence de référence."
+        )
+        st.stop()
+
+    total_produit = float(evolution["qte_produite"].sum())
+    total_planifie = float(evolution["qte_planifiee"].sum())
+    temps_theorique = float(evolution["temps_theorique_min"].sum())
+    part = temps_theorique / resultat["Tu"] if resultat["Tu"] else None
+
+    cartes.focus_produit(total_produit, total_planifie, temps_theorique, part,
+                         perimetre.capitalize(), unite)
+
+    st.subheader(f"Évolution par {periode_ui.LIBELLES_MAILLE[periode.maille].lower()}")
+    graphique, tableau = st.tabs(["Graphique", "Tableau"])
+    with graphique:
+        st.plotly_chart(
+            graphiques.evolution_produit(evolution, unite=unite), width="stretch"
+        )
+    with tableau:
+        lisible = evolution.copy()
+        lisible["taux_realisation"] = lisible["taux_realisation"].map(theme.format_taux)
+        for colonne in ("qte_produite", "qte_planifiee"):
+            lisible[colonne] = lisible[colonne].map(theme.format_nombre)
+        lisible["temps_theorique_min"] = lisible["temps_theorique_min"].map(
+            theme.format_duree)
+        st.dataframe(lisible.rename(columns={
+            "periode": "Période", "qte_planifiee": f"Planifié ({unite})",
+            "qte_produite": f"Produit ({unite})",
+            "temps_theorique_min": "Capacité mobilisée",
+            "taux_realisation": "Taux de réalisation",
+        }), width="stretch", hide_index=True)
+
+    cartes.pourquoi_pas_de_trs_par_produit()
+    st.caption(
+        f"Le TRS de la ligne entière sur la même période : "
+        f"{theme.format_taux(resultat['TRS'])}. Sélectionnez « Toute la ligne » "
+        "pour la cascade complète."
+    )
+    conn.close()
+    st.stop()
+
 # ---------------------------------------------------------------- synthèse
 
-cartes.indicateur_principal(resultat, unite=commun.unite_ligne(ligne))
+cartes.indicateur_principal(resultat, unite=unite)
 cartes.bandeau_niveau(resultat)
 
 colonnes = st.columns([2, 1])

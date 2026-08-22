@@ -183,6 +183,58 @@ def par_article(
     return groupe[colonnes]
 
 
+def evolution_produit(
+    conn: sqlite3.Connection,
+    ligne_id: int,
+    date_debut: date | str,
+    date_fin: date | str,
+    periode: str = "semaine",
+    article_code: str | None = None,
+    famille_libelle: str | None = None,
+) -> pd.DataFrame:
+    """Évolution d'un article ou d'une famille, période par période.
+
+    Expose la quantité planifiée, la quantité produite, le taux de réalisation
+    et le temps théorique consommé — **jamais** de TRS, TRG ou TRE : le temps
+    requis ne se ventile pas par produit (CDC §5.2 ter). Sans filtre, retourne
+    l'évolution de toute la ligne, ce qui permet de situer un produit dans
+    l'ensemble.
+    """
+    df = _production_resolue(conn, ligne_id, date_debut, date_fin)
+    colonnes = ["periode", "qte_planifiee", "qte_produite",
+                "temps_theorique_min", "taux_realisation"]
+    if df.empty:
+        return pd.DataFrame(columns=colonnes)
+
+    df = df.copy()
+    if article_code:
+        df = df[df["article_code"] == article_code]
+    elif famille_libelle:
+        rattachements = pd.read_sql_query(
+            "SELECT af.article_code, f.libelle AS famille, af.date_debut, af.date_fin"
+            " FROM article_famille af JOIN famille f ON f.id = af.famille_id",
+            conn,
+        )
+        df = historisation.resoudre_en_masse(rattachements, df, ["article_code"], "date")
+        df = df[df["famille"] == famille_libelle]
+    if df.empty:
+        return pd.DataFrame(columns=colonnes)
+
+    df["periode"] = cle_periode(df["date"], periode)
+    df["temps_theorique_min"] = df["qte_produite"] / df["valeur_ppm"]
+    groupe = df.groupby("periode", as_index=False).agg(
+        qte_planifiee=("qte_planifiee", "sum"),
+        qte_produite=("qte_produite", "sum"),
+        temps_theorique_min=("temps_theorique_min", "sum"),
+    )
+    groupe["taux_realisation"] = groupe.apply(
+        lambda ligne: ligne["qte_produite"] / ligne["qte_planifiee"]
+        if ligne["qte_planifiee"] else None,
+        axis=1,
+    )
+    return groupe[colonnes].sort_values("periode", ignore_index=True)
+
+
 def par_famille(
     conn: sqlite3.Connection,
     ligne_id: int,

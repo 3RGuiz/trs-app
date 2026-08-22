@@ -73,10 +73,40 @@ def test_pas_de_trs_par_article(base):
     for df in (
         agregation.par_article(base, 1, "2026-07-01", "2026-07-31"),
         agregation.par_famille(base, 1, "2026-07-01", "2026-07-31"),
+        agregation.evolution_produit(base, 1, "2026-07-01", "2026-07-31",
+                                     article_code="ART-001"),
+        agregation.evolution_produit(base, 1, "2026-07-01", "2026-07-31",
+                                     famille_libelle="Famille A"),
     ):
         colonnes = {c.upper() for c in df.columns}
         assert not colonnes & {"TRS", "TRG", "TRE"}
         assert "taux_realisation" in df.columns
+
+
+def test_evolution_par_produit(base):
+    # Deux semaines, deux articles : le filtre doit isoler le produit demandé
+    # sans jamais perdre de quantité au passage.
+    inserer_production(base, "2026-07-13", article="ART-001", produite=6_000,
+                       planifiee=8_000, of_numero="OF-1")
+    inserer_production(base, "2026-07-20", article="ART-001", produite=9_000,
+                       planifiee=10_000, of_numero="OF-2")
+    inserer_production(base, "2026-07-13", article="ART-002", produite=5_000,
+                       planifiee=5_000, of_numero="OF-3")
+
+    par_semaine = agregation.evolution_produit(
+        base, 1, "2026-07-01", "2026-07-31", "semaine", article_code="ART-001"
+    )
+    assert len(par_semaine) == 2
+    assert list(par_semaine["qte_produite"]) == [6_000, 9_000]
+    assert par_semaine.iloc[0]["taux_realisation"] == pytest.approx(0.75)
+
+    # Sans filtre, on retrouve la totalité de la ligne.
+    toute_la_ligne = agregation.evolution_produit(base, 1, "2026-07-01", "2026-07-31",
+                                                  "semaine")
+    assert toute_la_ligne["qte_produite"].sum() == 20_000
+    # La somme des articles égale le total : rien ne se perd ni ne se duplique.
+    par_article = agregation.par_article(base, 1, "2026-07-01", "2026-07-31")
+    assert par_article["qte_produite"].sum() == toute_la_ligne["qte_produite"].sum()
 
 
 def test_taux_de_realisation(base):

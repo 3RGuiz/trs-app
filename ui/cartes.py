@@ -56,6 +56,57 @@ def indicateur_principal(resultat: dict, unite: str = "UVC") -> None:
                 st.markdown("**Production non mesurable sur cette période.**")
 
 
+def focus_produit(
+    total_produit: float,
+    total_planifie: float,
+    temps_theorique: float,
+    part_capacite: float | None,
+    libelle: str,
+    unite: str = "UVC",
+) -> None:
+    """Ce qu'on peut dire d'un produit — et rien de plus.
+
+    Le TRS n'y figure pas volontairement : le temps utile se ventile par
+    produit, le temps requis non, faute d'horaires d'ordre de fabrication dans
+    l'ERP. Toute répartition inventée redonnerait le taux de réalisation sous un
+    autre nom (CDC §5.2 ter).
+    """
+    with st.container(border=True):
+        st.markdown(f"**Analyse : {libelle}**")
+        colonnes = st.columns(4)
+        colonnes[0].metric(f"Produit ({unite})", theme.format_nombre(total_produit))
+        colonnes[1].metric(f"Planifié ({unite})", theme.format_nombre(total_planifie))
+        colonnes[2].metric(
+            "Taux de réalisation",
+            theme.format_taux(total_produit / total_planifie if total_planifie else None),
+            help=DEFINITIONS["taux_realisation"],
+        )
+        colonnes[3].metric(
+            "Capacité mobilisée", theme.format_duree(temps_theorique),
+            help="Temps qu'il aurait fallu pour produire cette quantité à la "
+                 "cadence de référence. C'est la part de la capacité de la ligne "
+                 "que ce produit a consommée.",
+        )
+        if part_capacite is not None:
+            st.caption(
+                f"Soit {theme.format_taux(part_capacite)} du temps utile de la "
+                "ligne sur la période."
+            )
+
+
+def pourquoi_pas_de_trs_par_produit() -> None:
+    """Explique une absence, plutôt que de la laisser passer pour un oubli."""
+    st.info(
+        "**Pourquoi pas de TRS pour un produit ?** Le TRS rapporte le temps utile "
+        "au temps requis. Le temps utile se calcule bien par produit — c'est la "
+        "capacité mobilisée ci-dessus. Le temps requis, lui, ne se répartit pas : "
+        "l'extraction ERP ne dit pas combien de temps la ligne a passé sur chaque "
+        "ordre de fabrication. Un TRS par produit ne serait donc que le taux de "
+        "réalisation sous un autre nom, ou le même chiffre pour tous les produits. "
+        "Le TRS reste au niveau de la ligne, où il est exact."
+    )
+
+
 def cartes_cascade(resultat: dict) -> None:
     """Les trois taux de la cascade, avec ce qui manque quand ils ne sont pas mesurés."""
     st.markdown("**Décomposition du TRS**")

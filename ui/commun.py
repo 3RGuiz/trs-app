@@ -112,6 +112,57 @@ def selecteur_ligne(
     return next(l for l in lignes if l["id"] == choisi)
 
 
+def selecteur_produit(
+    conn: sqlite3.Connection, ligne_id: int, cle: str = "produit"
+) -> tuple[str | None, str | None, str]:
+    """Choix du périmètre analysé : toute la ligne, une famille, un article.
+
+    Retourne (article_code, famille_libelle, libellé du périmètre). Les deux
+    premiers valent None pour la ligne entière.
+
+    Ce sélecteur ne donne jamais accès à un TRS par produit : le temps requis ne
+    se ventile pas par article (CDC §5.2 ter). Il ouvre l'accès aux quantités,
+    au taux de réalisation et au temps de capacité mobilisé, qui eux se
+    ventilent exactement.
+    """
+    articles = [a[0] for a in conn.execute(
+        "SELECT DISTINCT article_code FROM production WHERE ligne_id = ? ORDER BY 1",
+        (ligne_id,),
+    ).fetchall()]
+    familles = [f[0] for f in conn.execute(
+        "SELECT DISTINCT f.libelle FROM famille f"
+        " JOIN article_famille af ON af.famille_id = f.id"
+        " JOIN production p ON p.article_code = af.article_code"
+        " WHERE p.ligne_id = ? ORDER BY 1", (ligne_id,),
+    ).fetchall()]
+
+    colonnes = st.columns([1, 2])
+    perimetre = colonnes[0].segmented_control(
+        "Périmètre", ["ligne", "famille", "article"],
+        default="ligne", key=f"{cle}_perimetre",
+        format_func=lambda v: {"ligne": "Toute la ligne", "famille": "Une famille",
+                               "article": "Un produit"}[v],
+    ) or "ligne"
+
+    if perimetre == "famille" and familles:
+        choisie = colonnes[1].selectbox("Famille", familles, key=f"{cle}_famille")
+        return None, choisie, f"famille {choisie}"
+    if perimetre == "article" and articles:
+        choisi = colonnes[1].selectbox(
+            "Produit", articles, key=f"{cle}_article",
+            format_func=lambda code: f"{code} — {libelle_article(conn, code)}",
+        )
+        return choisi, None, f"produit {choisi}"
+    return None, None, "toute la ligne"
+
+
+def libelle_article(conn: sqlite3.Connection, code: str) -> str:
+    ligne = conn.execute(
+        "SELECT libelle FROM article WHERE code = ?", (code,)
+    ).fetchone()
+    return ligne["libelle"] if ligne else code
+
+
 def unite_ligne(ligne: dict) -> str:
     """Unité de comptage lue dans le libellé de la ligne (« ... (kg) »).
 

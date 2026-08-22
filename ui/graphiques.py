@@ -147,6 +147,35 @@ def evolution_trs(
     return _mise_en_forme(figure)
 
 
+def evolution_produit(df: pd.DataFrame, unite: str = "UVC") -> go.Figure:
+    """Quantités produites et planifiées d'un produit, période par période.
+
+    Deux barres côte à côte plutôt qu'un taux : l'écart entre le plan et le
+    réalisé se lit directement, et la hauteur dit aussi le volume — un écart de
+    10 % ne pèse pas pareil sur 200 ou sur 20 000 unités.
+    """
+    if df.empty:
+        return _mise_en_forme(go.Figure(), hauteur=200)
+
+    figure = go.Figure()
+    figure.add_trace(go.Bar(
+        name="Planifié", x=df["periode"], y=df["qte_planifiee"],
+        marker_color=theme.COULEUR_GRILLE,
+        hovertemplate="Planifié : %{y:,.0f}<extra></extra>",
+    ))
+    figure.add_trace(go.Bar(
+        name="Produit", x=df["periode"], y=df["qte_produite"],
+        marker_color=theme.COULEUR_TEMPS_CONSERVE,
+        hovertemplate="Produit : %{y:,.0f}<extra></extra>",
+    ))
+    figure.update_layout(barmode="group", bargap=0.25, bargroupgap=0.05)
+    figure.update_yaxes(title=unite, rangemode="tozero")
+    figure = _mise_en_forme(figure)
+    figure.update_layout(showlegend=True,
+                         legend=dict(orientation="h", yanchor="bottom", y=1.02))
+    return figure
+
+
 def pareto_arrets(df_pareto: pd.DataFrame, limite: int = 8) -> go.Figure:
     """Pareto des arrêts : barres triées et courbe de cumul sur une seule échelle.
 
