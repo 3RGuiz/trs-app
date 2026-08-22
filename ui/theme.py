@@ -134,26 +134,29 @@ def appliquer_identite(assets: Path) -> None:
     st.html(
         f"""
         <style>
-          /* Le logo, posé sur une carte blanche centrée dans la bande jaune.
-             Streamlit fixe la hauteur de l'image ET celle de ses conteneurs :
-             sans libérer les deux, l'image reste écrêtée. Il la cale aussi à
-             gauche (object-position), d'où le recentrage explicite. */
-          [data-testid="stSidebarHeader"],
-          [data-testid="stLogoLink"],
-          [data-testid="stSidebar"] div:has(> [data-testid="stLogo"]),
-          [data-testid="stSidebar"] div:has(> [data-testid="stLogoLink"]) {{
+          /* En-tête de la barre : Streamlit y place le logo et le bouton de
+             repli côte à côte, dans une bande de hauteur fixe. On libère la
+             hauteur, on centre le logo, et le bouton passe hors du flux pour
+             ne pas être repoussé sous l'image. */
+          [data-testid="stSidebarHeader"] {{
+              position: relative !important;
               height: auto !important;
               max-height: none !important;
-              min-height: 0 !important;
-              /* La largeur compte autant que la hauteur : ces conteneurs sont
-                 dimensionnés sur leur contenu, et un pourcentage appliqué à
-                 l'image se calculerait sinon sur quelques dizaines de pixels. */
-              width: 100% !important;
-              max-width: none !important;
-              display: block !important;
-              overflow: visible !important;
+              display: flex !important;
+              justify-content: center !important;
+              align-items: center !important;
+              padding: 0.6rem 0.7rem 0.2rem !important;
+              margin-bottom: 0.4rem !important;
           }}
-          [data-testid="stLogo"] {{
+          [data-testid="stSidebarCollapseButton"] {{
+              position: absolute !important;
+              top: 0.3rem;
+              right: 0.3rem;
+              z-index: 5;
+          }}
+          /* Dans la barre latérale, le logo porte le testid stSidebarLogo —
+             et non stLogo, qui ne désigne que le logo de la page principale. */
+          [data-testid="stSidebarLogo"], [data-testid="stLogo"] {{
               width: {reglages['logo_largeur']} !important;
               max-width: {reglages['logo_largeur_max']} !important;
               height: auto !important;
@@ -161,7 +164,7 @@ def appliquer_identite(assets: Path) -> None:
               object-fit: contain !important;
               object-position: center !important;
               display: block !important;
-              margin: 0.5rem auto 0.9rem !important;
+              margin: 0 auto !important;
               padding: {reglages['logo_marge']} !important;
               background: #ffffff !important;
               border-radius: {reglages['logo_arrondi']} !important;
