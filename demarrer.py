@@ -30,6 +30,26 @@ from pathlib import Path
 
 RACINE = Path(__file__).parent
 PORT_SOUHAITE = 8501
+
+
+def chemin_base() -> Path:
+    """Chemin de la base, lu dans config.toml — même source que l'interface."""
+    import os
+    import tomllib
+
+    surcharge = os.environ.get("TRS_BASE")
+    if surcharge:
+        return Path(surcharge)
+    config = RACINE / "config.toml"
+    if config.exists():
+        try:
+            contenu = tomllib.loads(config.read_text(encoding="utf-8"))
+            return RACINE / contenu.get("base", {}).get("chemin", "data/trs.db")
+        except tomllib.TOMLDecodeError:
+            pass
+    return RACINE / "data" / "trs.db"
+
+
 DELAI_DEMARRAGE = 90          # secondes avant d'abandonner
 ETAPES = (
     "Préparation de l'environnement",
@@ -66,8 +86,58 @@ def trouver_port(depart: int = PORT_SOUHAITE, essais: int = 20) -> int:
     )
 
 
+def reglages_sauvegarde() -> tuple[Path | None, int, int]:
+    """Destination et rétention des sauvegardes, lues dans la base puis le poste.
+
+    Ordre : ce qui est saisi dans l'écran Paramètres, sinon le dossier
+    synchronisé trouvé sur la machine. Aucun chemin n'est écrit en dur : il
+    diffère d'un poste à l'autre.
+    """
+    from core import db as base, sauvegarde as module_sauvegarde
+
+    destination, jours, mois = None, 30, 12
+    try:
+        conn = base.ouvrir_connexion(chemin_base())
+        try:
+            parametres = dict(conn.execute("SELECT cle, valeur FROM parametre").fetchall())
+        finally:
+            conn.close()
+        if parametres.get("chemin_sauvegarde"):
+            destination = Path(parametres["chemin_sauvegarde"])
+        jours = int(parametres.get("retention_jours", 30))
+        mois = int(parametres.get("retention_mois", 12))
+    except Exception:
+        pass
+
+    if destination is None or not destination.parent.exists():
+        trouve = module_sauvegarde.trouver_dossier_synchronise()
+        if trouve is not None:
+            destination = trouve
+    return destination, jours, mois
+
+
+def sauvegarder_maintenant(moment: str) -> None:
+    """Sauvegarde automatique, silencieuse en cas d'échec côté utilisateur.
+
+    Appelée à l'ouverture et à la fermeture. La fermeture est un moment fiable
+    ici parce que c'est ce lanceur qui arrête le serveur : le cahier des charges
+    déconseillait de s'y fier sous Streamlit seul, où rien ne garantit qu'un
+    code de sortie s'exécute.
+    """
+    from core import sauvegarde as module_sauvegarde
+
+    base_donnees = chemin_base()
+    if not base_donnees.exists():
+        return
+    destination, jours, mois = reglages_sauvegarde()
+    cible, message = module_sauvegarde.sauvegarder_si_possible(
+        base_donnees, destination, retention_jours=jours, retention_mois=mois
+    )
+    print(f"[{moment}] {message}")
+
+
 def arreter_serveur(processus: subprocess.Popen | None) -> None:
-    """Arrête le serveur sans laisser d'orphelin.
+    """Arrête le serveur, puis sauvegarde la base une fois les écritures closes.
 
     Un serveur resté en vie après la fermeture du lanceur occupe le port et
     continue de servir une version périmée du code : c'est indétectable pour
@@ -80,6 +150,11 @@ def arreter_serveur(processus: subprocess.Popen | None) -> None:
         processus.wait(timeout=5)
     except subprocess.TimeoutExpired:
         processus.kill()
+    # Après l'arrêt : la base n'est plus écrite, la copie est donc cohérente.
+    try:
+        sauvegarder_maintenant("fermeture")
+    except Exception:
+        pass
 
 
 def lancer_serveur(port: int) -> subprocess.Popen:
@@ -178,6 +253,10 @@ def demarrer_en_console() -> int:
     if attendre_serveur(processus, port, rappel=lambda e: print(f"  {e}...")):
         adresse = f"http://localhost:{port}"
         print(f"Application prête : {adresse}")
+        try:
+            sauvegarder_maintenant("ouverture")
+        except Exception:
+            pass
         webbrowser.open(adresse)
         try:
             processus.wait()
@@ -293,6 +372,10 @@ def demarrer_avec_fenetre() -> int:
             racine.after(0, message.configure, {"text": etape + "..."})
 
         if attendre_serveur(processus, port, rappel=annoncer):
+            try:
+                sauvegarder_maintenant("ouverture")
+            except Exception:
+                pass
             racine.after(0, terminer, port)
         else:
             racine.after(0, afficher_echec,

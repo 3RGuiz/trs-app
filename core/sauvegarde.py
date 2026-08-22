@@ -62,6 +62,17 @@ def _verifier(cible: Path, nb_lignes_source: int) -> None:
             )
     finally:
         controle.close()
+        # L'ouverture de contrôle laisse un journal temporaire à côté de la
+        # copie : sans ce nettoyage, le dossier de sauvegarde se remplit de
+        # fichiers inutiles qui ressemblent à des sauvegardes.
+        for reste in (cible.with_name(cible.name + "-journal"),
+                      cible.with_name(cible.name + "-wal"),
+                      cible.with_name(cible.name + "-shm")):
+            if reste.exists():
+                try:
+                    reste.unlink()
+                except OSError:
+                    pass
 
 
 def sauvegarder(
@@ -103,6 +114,43 @@ def sauvegarder(
     return cible
 
 
+def trouver_dossier_synchronise(nom_recherche: str = "Sauvegardes Dashboard TRS",
+                                profondeur: int = 6) -> Path | None:
+    """Cherche le dossier de sauvegarde dans les espaces synchronisés du poste.
+
+    Sur un poste Windows d'entreprise, OneDrive matérialise les bibliothèques
+    SharePoint sous le profil utilisateur, avec un nom qui varie d'une
+    organisation à l'autre. Plutôt que d'imposer un chemin en dur — qui serait
+    faux sur un autre poste — on le retrouve par le nom du dossier cible.
+
+    Retourne None si rien n'est trouvé : l'appelant se rabat alors sur le
+    chemin configuré, et l'utilisateur peut toujours le saisir à la main.
+    """
+    racines = []
+    profil = Path.home()
+    racines.append(profil)
+    # Emplacements usuels des bibliothèques synchronisées, Windows et macOS.
+    for motif in ("OneDrive*", "Library/CloudStorage/*"):
+        racines.extend(sorted(profil.glob(motif)))
+
+    vus: set[Path] = set()
+    for racine in racines:
+        if not racine.is_dir():
+            continue
+        for candidat in racine.glob("/".join(["*"] * profondeur)):
+            if candidat.name == nom_recherche and candidat.is_dir():
+                return candidat
+        # Recherche moins profonde d'abord : on s'arrête au premier trouvé.
+        for niveau in range(1, profondeur):
+            for candidat in racine.glob("/".join(["*"] * niveau)):
+                if candidat in vus:
+                    continue
+                vus.add(candidat)
+                if candidat.name == nom_recherche and candidat.is_dir():
+                    return candidat
+    return None
+
+
 def derniere_reussite(journal: Path | str) -> datetime | None:
     """Horodatage de la dernière sauvegarde réussie, ou None — à afficher sur
     l'écran Paramètres, avec alerte en accueil au-delà de 3 jours."""
@@ -115,6 +163,44 @@ def derniere_reussite(journal: Path | str) -> datetime | None:
         if len(morceaux) >= 2 and morceaux[1] == "REUSSITE":
             derniere = datetime.fromisoformat(morceaux[0])
     return derniere
+
+
+def sauvegarder_si_possible(
+    chemin_db: Path | str,
+    destination_dir: Path | str | None,
+    prefixe: str = "trs",
+    retention_jours: int = 30,
+    retention_mois: int = 12,
+) -> tuple[Path | None, str]:
+    """Sauvegarde sans jamais interrompre l'appelant, et dit ce qui s'est passé.
+
+    Pensée pour les sauvegardes automatiques au démarrage et à la fermeture :
+    une destination absente ou un réseau indisponible ne doivent pas empêcher
+    l'application de s'ouvrir, ni bloquer sa fermeture. L'échec est retourné,
+    pas levé — mais il est toujours journalisé, car une sauvegarde qui échoue
+    en silence est pire que pas de sauvegarde du tout.
+
+    Retourne (chemin écrit ou None, message pour l'utilisateur).
+    """
+    if not destination_dir:
+        return None, "Aucun dossier de sauvegarde configuré."
+    destination = Path(destination_dir)
+    try:
+        cible = sauvegarder(chemin_db, destination, prefixe=prefixe)
+    except SauvegardeEchouee as erreur:
+        return None, str(erreur)
+    except OSError as erreur:
+        return None, (
+            f"Le dossier de sauvegarde {destination} est inaccessible ({erreur}). "
+            "S'il s'agit d'un dossier synchronisé, vérifiez que la synchronisation "
+            "est active."
+        )
+    try:
+        supprimes = rotation(destination, prefixe, retention_jours, retention_mois)
+    except OSError:
+        supprimes = []
+    complement = f" — {len(supprimes)} ancienne(s) copie(s) purgée(s)" if supprimes else ""
+    return cible, f"Sauvegarde écrite et vérifiée : {cible.name}{complement}"
 
 
 def rotation(
