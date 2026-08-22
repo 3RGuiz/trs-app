@@ -72,16 +72,22 @@ def formulaire_changement(
             type_champ = description.get("type", "texte")
             valeur = description.get("valeur")
             if type_champ == "nombre":
+                # Un référentiel encore vide n'a aucune valeur en vigueur : la
+                # valeur proposée doit rester dans les bornes, sinon le formulaire
+                # refuse de s'afficher.
+                minimum = float(description.get("minimum", 0.0))
+                defaut = float(valeur) if valeur is not None else minimum
                 saisies[colonne] = st.number_input(
-                    libelle, value=float(valeur) if valeur is not None else 0.0,
-                    min_value=description.get("minimum", 0.0),
+                    libelle, value=max(defaut, minimum), min_value=minimum,
                     step=description.get("pas", 1.0), format="%.2f",
                 )
             elif type_champ == "entier":
+                minimum = int(description.get("minimum", 0))
+                maximum = int(description.get("maximum", 1440))
+                defaut = int(valeur) if valeur is not None else minimum
                 saisies[colonne] = st.number_input(
-                    libelle, value=int(valeur) if valeur is not None else 0,
-                    min_value=int(description.get("minimum", 0)),
-                    max_value=int(description.get("maximum", 1440)), step=1,
+                    libelle, value=min(max(defaut, minimum), maximum),
+                    min_value=minimum, max_value=maximum, step=1,
                 )
             elif type_champ == "choix":
                 options = description.get("options", [])

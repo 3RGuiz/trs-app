@@ -28,6 +28,7 @@ DOSSIER_EXEMPLES = Path(__file__).parent / "data" / "exemples"
 
 FAMILLES = [("FAM-A", "Famille A"), ("FAM-B", "Famille B"), ("FAM-C", "Famille C")]
 ARTICLES = [(f"ART-{i:03d}", f"Article fictif {i}", FAMILLES[i % 3][0]) for i in range(1, 9)]
+ARTICLES_PAR_CODE = [(code, famille) for code, _, famille in ARTICLES]
 
 # Arborescence purement synthétique : 4 zones, 8 machines.
 ARBRE = {
@@ -69,9 +70,15 @@ def generer(conn, graine: int = 2026) -> None:
                                  "Bascule de cadence fictive du 1er juillet", AUTEUR)
 
     # Un article change de famille en cours de période (deux modes de lecture, §4.1).
-    famille_b = conn.execute("SELECT id FROM famille WHERE code = 'FAM-B'").fetchone()[0]
+    # La famille d'arrivée doit différer de celle de départ, sinon les deux vues
+    # donnent le même résultat et le jeu de test ne prouve rien.
+    famille_depart = dict(ARTICLES_PAR_CODE)["ART-001"]
+    famille_arrivee = next(code for code, _ in FAMILLES if code != famille_depart)
+    famille_id = conn.execute(
+        "SELECT id FROM famille WHERE code = ?", (famille_arrivee,)
+    ).fetchone()[0]
     historisation.cloturer_et_inserer(
-        conn, "article_famille", {"article_code": "ART-001"}, {"famille_id": famille_b},
+        conn, "article_famille", {"article_code": "ART-001"}, {"famille_id": famille_id},
         "2026-08-01", "Réorganisation fictive du catalogue", AUTEUR,
     )
 
