@@ -34,3 +34,10 @@ tests/test_local_*.py
 # ---- Outils de l'assistant de développement, propres au poste ----
 .agents/
 .claude/
+
+# ---- Référentiel réel de l'entreprise : JAMAIS versionné (regle 9) ----
+# Noms de produits, marques, procedes. Le generateur versionne est
+# generer_donnees_test.py, entierement fictif.
+*_entreprise.py
+*_reel.py
+referentiel_local*
