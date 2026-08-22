@@ -70,6 +70,69 @@ def ligne_active(conn: sqlite3.Connection) -> dict | None:
     return dict(ligne) if ligne else None
 
 
+def lignes_disponibles(conn: sqlite3.Connection) -> list[dict]:
+    """Toutes les lignes en service, dans l'ordre du référentiel."""
+    return [dict(l) for l in conn.execute(
+        "SELECT * FROM ligne WHERE date_fin IS NULL ORDER BY id"
+    ).fetchall()]
+
+
+def message_base_vide() -> None:
+    st.info(
+        "Aucune ligne de production n'est encore déclarée. Créez-la depuis la "
+        "page Référentiel, avec ses cadences et son calendrier. Pour essayer "
+        "l'application sans données réelles : `python generer_donnees_test.py`."
+    )
+    st.stop()
+
+
+def selecteur_ligne(
+    conn: sqlite3.Connection, lignes: list[dict], cle: str = "ligne"
+) -> dict:
+    """Choix de la ligne analysée, mémorisé entre les écrans.
+
+    Une seule ligne : pas de widget, le titre suffit. Plusieurs : le choix
+    doit être visible en permanence, car tous les chiffres en dépendent.
+    """
+    if len(lignes) == 1:
+        st.caption(f"Ligne mesurée : {lignes[0]['libelle']}")
+        return lignes[0]
+
+    identifiants = [l["id"] for l in lignes]
+    if st.session_state.get("ligne_analysee") not in identifiants:
+        st.session_state.ligne_analysee = identifiants[0]
+
+    libelles = {l["id"]: l["libelle"] for l in lignes}
+    choisi = st.selectbox(
+        "Ligne analysée", identifiants,
+        index=identifiants.index(st.session_state.ligne_analysee),
+        format_func=lambda i: libelles[i], key=f"{cle}_selecteur_ligne",
+    )
+    st.session_state.ligne_analysee = choisi
+    return next(l for l in lignes if l["id"] == choisi)
+
+
+def unite_ligne(ligne: dict) -> str:
+    """Unité de comptage lue dans le libellé de la ligne (« ... (kg) »).
+
+    Le modèle ne porte pas encore d'unité par ligne : tant qu'elle n'y est pas,
+    on la lit là où l'utilisateur l'a écrite plutôt que de supposer l'UVC.
+    """
+    libelle = ligne.get("libelle", "")
+    if "(" in libelle and ")" in libelle:
+        candidat = libelle.rsplit("(", 1)[1].split(")")[0].strip()
+        if candidat and len(candidat) <= 6:
+            return candidat
+    return "UVC"
+
+
+def production_absente(conn: sqlite3.Connection, ligne_id: int) -> bool:
+    """Vrai si la ligne n'a aucune production importée — message déjà affiché."""
+    return conn.execute(
+        "SELECT MAX(date) FROM production WHERE ligne_id = ?", (ligne_id,)
+    ).fetchone()[0] is None
+
+
 def exiger_ligne(conn: sqlite3.Connection) -> dict:
     """Récupère la ligne à analyser, ou explique comment démarrer."""
     ligne = ligne_active(conn)
@@ -94,19 +157,21 @@ def bandeau_fraicheur(conn: sqlite3.Connection, ligne_id: int) -> str | None:
     dernier_import = conn.execute("SELECT MAX(date_import) FROM import_log").fetchone()[0]
     if derniere is None:
         st.warning(
-            "Aucune donnée de production importée. Rendez-vous sur la page Import."
+            "Aucune donnée de production importée pour cette ligne. "
+            "Rendez-vous sur la page Import."
         )
         return None
-    st.caption(
-        f"Données à jour au {date.fromisoformat(derniere):%d/%m/%Y}"
-        + (f" — dernier import le {dernier_import}" if dernier_import else "")
-    )
     retard = (date.today() - date.fromisoformat(derniere)).days
+    fraicheur = f"Données à jour au {date.fromisoformat(derniere):%d/%m/%Y}"
+    if dernier_import:
+        fraicheur += f" · dernier import le {dernier_import[:10]}"
     if retard > 7:
         st.warning(
-            f"Les données datent de {retard} jours. Une extraction plus récente "
-            "est peut-être disponible."
+            f"{fraicheur}. Ces données datent de {retard} jours : une extraction "
+            "plus récente est peut-être disponible."
         )
+    else:
+        st.caption(fraicheur)
     return derniere
 
 

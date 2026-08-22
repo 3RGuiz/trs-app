@@ -23,7 +23,7 @@ from core.db import iso
 PERIODES = ("jour", "semaine", "mois", "annee")
 
 
-def _cle_periode(dates: pd.Series, periode: str) -> pd.Series:
+def cle_periode(dates: pd.Series, periode: str) -> pd.Series:
     """Clé de regroupement temporel. Les semaines suivent le calendrier ISO."""
     horodates = pd.to_datetime(dates)
     if periode == "jour":
@@ -48,7 +48,7 @@ def agreger_par_periode(df_cascade: pd.DataFrame, periode: str) -> pd.DataFrame:
     if df_cascade.empty:
         return pd.DataFrame()
     df = df_cascade.copy()
-    df["periode"] = _cle_periode(df["date"], periode)
+    df["periode"] = cle_periode(df["date"], periode)
     lignes = []
     for cle, groupe in df.groupby("periode", sort=True):
         resultat = indicateurs.indicateurs_periode(groupe)

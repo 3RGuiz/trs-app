@@ -11,26 +11,27 @@ import streamlit as st
 
 from core import agregation, arrets, cadences, indicateurs, temps
 from core.erreurs import ErreurMetier
-from ui import commun, graphiques, theme
+from ui import cartes, commun, graphiques, periode as periode_ui, theme
 
 st.set_page_config(page_title="TRS", layout="wide")
-st.title("TRS de la ligne")
 
 conn = commun.ouvrir()
-ligne = commun.exiger_ligne(conn)
-derniere = commun.bandeau_fraicheur(conn, ligne["id"])
-if derniere is None:
+lignes = commun.lignes_disponibles(conn)
+if not lignes:
+    commun.message_base_vide()
+
+entete = st.columns([3, 2])
+with entete[0]:
+    st.title("TRS")
+with entete[1]:
+    ligne = commun.selecteur_ligne(conn, lignes, cle="trs")
+
+commun.bandeau_fraicheur(conn, ligne["id"])
+if commun.production_absente(conn, ligne["id"]):
     st.stop()
 
-# ---------------------------------------------------------------- période
-
-colonnes = st.columns([1, 1, 1])
-defaut_fin = date.fromisoformat(derniere)
-defaut_debut = defaut_fin - timedelta(days=29)
-periode_debut = colonnes[0].date_input("Début de période", value=defaut_debut)
-periode_fin = colonnes[1].date_input("Fin de période", value=defaut_fin)
-maille = colonnes[2].selectbox("Maille d'analyse", ["jour", "semaine", "mois", "annee"],
-                               index=1)
+periode = periode_ui.selecteur(conn, ligne["id"])
+periode_debut, periode_fin, maille = periode.debut, periode.fin, periode.maille
 commun.valider_periode(periode_debut, periode_fin)
 
 try:
@@ -47,8 +48,6 @@ except Exception as erreur:
     )
 
 mode = temps.mode_tr(conn, periode_fin)
-st.caption(f"Mode de calcul du temps requis : {mode}")
-commun.mention_niveau(resultat)
 
 if changements:
     st.warning(
@@ -61,24 +60,26 @@ if changements:
 
 # ---------------------------------------------------------------- indicateurs
 
-st.subheader("Indicateurs de la période")
-cartes = st.columns(4)
-cartes[0].metric("TRS", theme.format_taux(resultat["TRS"]))
-cartes[1].metric("TRG", theme.format_taux(resultat["TRG"]),
-                 help="Rapporte la production au temps d'ouverture : il intègre "
-                      "donc le niveau de charge.")
-cartes[2].metric("TRE", theme.format_taux(resultat["TRE"]))
-cartes[3].metric("Taux de réalisation", theme.format_taux(resultat["taux_realisation"]))
+cartes.indicateur_principal(resultat, unite=commun.unite_ligne(ligne))
+cartes.bandeau_niveau(resultat)
+st.caption(
+    f"Temps requis : mode {mode}."
+    + ("  Les arrêts hors requis sont affichés mais non retranchés."
+       if mode == "FIXE" else
+       "  Le temps requis est déduit des arrêts hors requis déclarés.")
+)
 
-cartes = st.columns(5)
-cartes[0].metric("Qualité TQ", theme.format_taux(resultat["TQ"]))
-cartes[1].metric("Performance TP", theme.format_taux(resultat["TP"]))
-cartes[2].metric("Disponibilité DO", theme.format_taux(resultat["DO"]))
-cartes[3].metric("Charge TC", theme.format_taux(resultat["TC"]))
-cartes[4].metric("Stratégique TS", theme.format_taux(resultat["TS"]))
+colonnes = st.columns([2, 1])
+with colonnes[0]:
+    cartes.cartes_cascade(resultat)
+with colonnes[1]:
+    st.markdown("**Réalisation du plan**")
+    st.metric("Taux de réalisation", theme.format_taux(resultat["taux_realisation"]))
 
-for alerte in resultat["alertes"]:
-    st.warning(alerte)
+with st.expander("Autres indicateurs de contexte"):
+    cartes.cartes_contexte(resultat)
+
+cartes.alertes(resultat, limite=3)
 
 # ---------------------------------------------------------------- cascade
 
@@ -113,15 +114,15 @@ with tableau:
 
 # ---------------------------------------------------------------- évolution
 
-st.subheader(f"Évolution du TRS par {maille}")
+st.subheader(f"Évolution par {periode_ui.LIBELLES_MAILLE[maille].lower()}")
 if par_periode.empty or par_periode["TRS"].dropna().empty:
     st.info("Aucune période complète à afficher sur cet intervalle.")
 else:
     graphique, tableau = st.tabs(["Graphique", "Tableau"])
     with graphique:
         st.plotly_chart(
-            graphiques.evolution_trs(par_periode, changements), width="stretch"
-        )
+            graphiques.evolution_trs(par_periode, changements, maille=maille),
+            width="stretch")
     with tableau:
         lisible = par_periode[["periode", "TRS", "TRG", "TRE", "Tu", "Tr", "To"]].copy()
         for colonne in ("TRS", "TRG", "TRE"):
@@ -140,9 +141,11 @@ if resultat["nb_arrets_saisis"] == 0:
         "La saisie se fait depuis la page Arrêts."
     )
 else:
-    niveau = st.radio("Lecture", ["motif", "zone", "element"], horizontal=True,
-                      format_func=lambda v: {"motif": "Par motif", "zone": "Par zone",
-                                             "element": "Par équipement"}[v])
+    niveau = st.segmented_control(
+        "Lecture", ["motif", "zone", "element"], default="motif",
+        format_func=lambda v: {"motif": "Par motif", "zone": "Par zone",
+                               "element": "Par équipement"}[v],
+    ) or "motif"
     try:
         pareto = arrets.pareto(conn, ligne["id"], periode_debut, periode_fin, par=niveau)
     except Exception as erreur:
@@ -174,13 +177,23 @@ st.caption(
     "à cadence constante recalcule les deux avec la même référence : c'est elle "
     "qui montre le progrès réel."
 )
+duree = periode.nb_jours
+precedente_fin = periode_debut - timedelta(days=1)
+precedente_debut = precedente_fin - timedelta(days=duree - 1)
+
 colonnes = st.columns(4)
-a_debut = colonnes[0].date_input("Période A — début", value=defaut_debut - timedelta(days=30),
-                                 key="a_debut")
-a_fin = colonnes[1].date_input("Période A — fin", value=defaut_debut - timedelta(days=1),
-                               key="a_fin")
-b_debut = colonnes[2].date_input("Période B — début", value=defaut_debut, key="b_debut")
-b_fin = colonnes[3].date_input("Période B — fin", value=defaut_fin, key="b_fin")
+a_debut = colonnes[0].date_input("Période A — début", value=precedente_debut,
+                                 key="a_debut", format="DD/MM/YYYY")
+a_fin = colonnes[1].date_input("Période A — fin", value=precedente_fin,
+                               key="a_fin", format="DD/MM/YYYY")
+b_debut = colonnes[2].date_input("Période B — début", value=periode_debut,
+                                 key="b_debut", format="DD/MM/YYYY")
+b_fin = colonnes[3].date_input("Période B — fin", value=periode_fin,
+                               key="b_fin", format="DD/MM/YYYY")
+st.caption(
+    f"Par défaut : la période analysée ({duree} jours) comparée aux {duree} jours "
+    "qui la précèdent."
+)
 
 if st.button("Comparer"):
     commun.valider_periode(a_debut, a_fin)

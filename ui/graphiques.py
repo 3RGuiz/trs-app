@@ -14,6 +14,8 @@ from __future__ import annotations
 import pandas as pd
 import plotly.graph_objects as go
 
+from core import agregation
+
 from ui import theme
 
 # Ordre imposé de la cascade (CDC §7.0).
@@ -106,6 +108,7 @@ def evolution_trs(
     df_periodes: pd.DataFrame,
     changements_cadence: list[str] | None = None,
     objectif: float | None = None,
+    maille: str = "semaine",
 ) -> go.Figure:
     """Courbe d'évolution du TRS, avec repères aux changements de cadence.
 
@@ -127,13 +130,18 @@ def evolution_trs(
             annotation_text=f"Objectif {theme.format_taux(objectif)}",
             annotation_position="top left",
         )
+    # Repères de changement de cadence. L'axe des abscisses étant catégoriel,
+    # la position se donne par l'index de la catégorie : passer le libellé fait
+    # échouer Plotly, qui tente d'en calculer une moyenne numérique.
+    categories = list(df["periode"])
     for changement in (changements_cadence or []):
-        # Le repère est posé sur la période qui contient le changement.
-        correspondantes = [p for p in df["periode"] if str(p).startswith(changement[:7])]
-        if correspondantes:
+        cle = agregation.cle_periode(pd.Series([changement]), maille).iloc[0]
+        if cle in categories:
             figure.add_vline(
-                x=correspondantes[0], line_dash="dash", line_color=theme.COULEUR_PERTE,
-                annotation_text="Changement de cadence", annotation_position="top right",
+                x=categories.index(cle), line_dash="dash",
+                line_color=theme.COULEUR_PERTE,
+                annotation_text="Changement de cadence",
+                annotation_position="top right",
             )
     figure.update_yaxes(title="TRS (%)", rangemode="tozero")
     return _mise_en_forme(figure)

@@ -14,27 +14,32 @@ import streamlit as st
 
 from core import agregation
 from core.erreurs import ErreurMetier
-from ui import commun, theme
+from ui import commun, periode as periode_ui, theme
 
 st.set_page_config(page_title="Rendement", layout="wide")
-st.title("Rendement par article et par famille")
 
 conn = commun.ouvrir()
-ligne = commun.exiger_ligne(conn)
-derniere = commun.bandeau_fraicheur(conn, ligne["id"])
-if derniere is None:
+lignes = commun.lignes_disponibles(conn)
+if not lignes:
+    commun.message_base_vide()
+
+entete = st.columns([3, 2])
+with entete[0]:
+    st.title("Rendement")
+with entete[1]:
+    ligne = commun.selecteur_ligne(conn, lignes, cle="rendement")
+
+commun.bandeau_fraicheur(conn, ligne["id"])
+if commun.production_absente(conn, ligne["id"]):
     st.stop()
 
-colonnes = st.columns([1, 1, 1])
-defaut_fin = date.fromisoformat(derniere)
-defaut_debut = defaut_fin - timedelta(days=29)
-periode_debut = colonnes[0].date_input("Début de période", value=defaut_debut)
-periode_fin = colonnes[1].date_input("Fin de période", value=defaut_fin)
-vue = colonnes[2].selectbox(
-    "Lecture des familles", ["historique", "actuelle"],
+periode = periode_ui.selecteur(conn, ligne["id"], avec_maille=False)
+periode_debut, periode_fin = periode.debut, periode.fin
+vue = st.segmented_control(
+    "Lecture des familles", ["historique", "actuelle"], default="historique",
     format_func=lambda v: "Familles de l'époque" if v == "historique"
     else "Catalogue d'aujourd'hui",
-)
+) or "historique"
 commun.valider_periode(periode_debut, periode_fin)
 
 st.caption(
