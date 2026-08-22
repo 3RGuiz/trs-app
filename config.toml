@@ -12,6 +12,6 @@ logo = "assets/logo.png"
 # Taille et cadre du logo dans la barre latérale. Ajustables sans toucher au
 # code : relancez l'application pour voir l'effet.
 logo_largeur = "90%"          # part de la largeur de la barre
-logo_largeur_max = "230px"    # plafond, pour ne pas déborder
+logo_largeur_max = "260px"    # plafond, pour ne pas déborder
 logo_marge = "0.85rem 1rem"   # épaisseur du contour blanc (haut/bas, côtés)
 logo_arrondi = "0.9rem"       # arrondi des coins de la carte blanche

@@ -145,6 +145,11 @@ def appliquer_identite(assets: Path) -> None:
               height: auto !important;
               max-height: none !important;
               min-height: 0 !important;
+              /* La largeur compte autant que la hauteur : ces conteneurs sont
+                 dimensionnés sur leur contenu, et un pourcentage appliqué à
+                 l'image se calculerait sinon sur quelques dizaines de pixels. */
+              width: 100% !important;
+              max-width: none !important;
               display: block !important;
               overflow: visible !important;
           }}
@@ -171,8 +176,10 @@ def appliquer_identite(assets: Path) -> None:
           [data-testid="stMetricLabel"] {{ color: #52514e; }}
           table, [data-testid="stDataFrame"] {{ font-variant-numeric: tabular-nums; }}
 
-          /* Titres de section soulignés du jaune de la charte. */
-          h2 {{
+          /* Titres de section soulignés du jaune de la charte. st.subheader
+             produit un h3, st.header un h2 : les deux sont visés. */
+          [data-testid="stMainBlockContainer"] h2,
+          [data-testid="stMainBlockContainer"] h3 {{
               border-bottom: 3px solid {ACCENT_CHAUD};
               padding-bottom: 0.2rem;
               display: inline-block;
